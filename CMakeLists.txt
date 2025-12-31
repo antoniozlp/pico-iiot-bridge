@@ -43,7 +43,7 @@ include(FreeRTOS_Kernel_import.cmake)
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(pico-iiot-bridge pico-iiot-bridge.c )
+add_executable(pico-iiot-bridge src/main.c )
 
 pico_set_program_name(pico-iiot-bridge "pico-iiot-bridge")
 pico_set_program_version(pico-iiot-bridge "0.1")
