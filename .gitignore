@@ -1,3 +1,8 @@
 build
 .vscode/*
 .cache/*
+
+.clangd
+
+# macos
+.DS_Store
