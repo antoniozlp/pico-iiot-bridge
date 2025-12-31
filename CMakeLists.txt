@@ -33,6 +33,14 @@ project(pico-iiot-bridge C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+# Set the FreeRTOS Kernel path to the local FreeRTOS-Kernel folder
+set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/FreeRTOS-Kernel)
+
+# Add FreeRTOS configuration (must be before FreeRTOS kernel import)
+add_subdirectory(lib/FreeRTOS-config)
+# Pull in FreeRTOS Kernel
+include(FreeRTOS_Kernel_import.cmake)
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(pico-iiot-bridge pico-iiot-bridge.c )
@@ -46,7 +54,11 @@ pico_enable_stdio_usb(pico-iiot-bridge 0)
 
 # Add the standard library to the build
 target_link_libraries(pico-iiot-bridge
-        pico_stdlib)
+        pico_stdlib
+        pico_multicore
+        FreeRTOS-Kernel
+        FreeRTOS-Kernel-Heap4
+        freertos_config)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE
