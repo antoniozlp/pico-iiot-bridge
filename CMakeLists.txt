@@ -33,6 +33,8 @@ project(pico-iiot-bridge C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+
+# ========================= FreeRTOS =========================
 # Set the FreeRTOS Kernel path to the local FreeRTOS-Kernel folder
 set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/FreeRTOS-Kernel)
 
@@ -40,6 +42,108 @@ set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/FreeRTOS-Kernel)
 add_subdirectory(lib/FreeRTOS-config)
 # Pull in FreeRTOS Kernel
 include(FreeRTOS_Kernel_import.cmake)
+# ===========================================================
+
+# ========================= WIZnet =========================
+# Set board
+# set(BOARD_NAME WIZnet_Ethernet_HAT)
+# set(BOARD_NAME W5100S_EVB_PICO)
+# set(BOARD_NAME W5500_EVB_PICO)
+# set(BOARD_NAME W55RP20_EVB_PICO)
+# set(BOARD_NAME W6100_EVB_PICO)
+# set(BOARD_NAME W6300_EVB_PICO)
+# set(BOARD_NAME W5500_EVB_PICO2)
+set(BOARD_NAME W6100_EVB_PICO2)
+# set(BOARD_NAME W6300_EVB_PICO2)
+
+
+if(${BOARD_NAME} STREQUAL WIZnet_Ethernet_HAT)
+    #set(PICO_PLATFORM rp2350) #If you are using WIZnet_ethernet_HAT with Pico2, uncomment it.
+    set(WIZNET_CHIP W5100S)
+    add_definitions(-D_WIZCHIP_=W5100S)
+    add_definitions(-DDEVICE_BOARD_NAME=WIZnet_Ethernet_HAT)
+
+elseif(${BOARD_NAME} STREQUAL W5100S_EVB_PICO)
+    set(WIZNET_CHIP W5100S)
+    add_definitions(-D_WIZCHIP_=W5100S)
+    add_definitions(-DDEVICE_BOARD_NAME=W5100S_EVB_PICO)
+
+elseif(${BOARD_NAME} STREQUAL W5500_EVB_PICO)
+    set(WIZNET_CHIP W5500)
+    add_definitions(-D_WIZCHIP_=W5500)
+    add_definitions(-DDEVICE_BOARD_NAME=W5500_EVB_PICO)
+
+elseif(${BOARD_NAME} STREQUAL W55RP20_EVB_PICO)
+    set(WIZNET_CHIP W5500)
+    add_definitions(-D_WIZCHIP_=W5500)
+    add_definitions(-DDEVICE_BOARD_NAME=W55RP20_EVB_PICO)
+
+elseif(${BOARD_NAME} STREQUAL W6100_EVB_PICO)
+    set(WIZNET_CHIP W6100)
+    add_definitions(-D_WIZCHIP_=W6100)
+    add_definitions(-DDEVICE_BOARD_NAME=W6100_EVB_PICO)
+
+elseif(${BOARD_NAME} STREQUAL W6300_EVB_PICO)
+    set(WIZNET_CHIP W6300)
+    add_definitions(-D_WIZCHIP_=W6300)
+    add_definitions(-DDEVICE_BOARD_NAME=W6300_EVB_PICO)
+    # Set QSPI MODE for W6300
+    set(WIZCHIP_QSPI_MODE QSPI_QUAD_MODE)
+    # set(WIZCHIP_QSPI_MODE QSPI_DUAL_MODE)
+    # set(WIZCHIP_QSPI_MODE QSPI_SINGLE_MODE)
+
+    add_definitions(-D_WIZCHIP_QSPI_MODE_=${WIZCHIP_QSPI_MODE})
+
+elseif(${BOARD_NAME} STREQUAL W5100S_EVB_PICO2)
+    set(WIZNET_CHIP W5100S)
+    add_definitions(-D_WIZCHIP_=W5100S)
+    add_definitions(-DDEVICE_BOARD_NAME=W5100S_EVB_PICO2)
+
+elseif(${BOARD_NAME} STREQUAL W5500_EVB_PICO2)
+    set(WIZNET_CHIP W5500)
+    add_definitions(-D_WIZCHIP_=W5500)
+    add_definitions(-DDEVICE_BOARD_NAME=W5500_EVB_PICO2)
+
+elseif(${BOARD_NAME} STREQUAL W6100_EVB_PICO2)
+    set(WIZNET_CHIP W6100)
+    add_definitions(-D_WIZCHIP_=W6100)
+    add_definitions(-DDEVICE_BOARD_NAME=W6100_EVB_PICO2)
+
+elseif(${BOARD_NAME} STREQUAL W6300_EVB_PICO2)
+    set(WIZNET_CHIP W6300)
+    add_definitions(-D_WIZCHIP_=W6300)
+    add_definitions(-DDEVICE_BOARD_NAME=W6300_EVB_PICO2)
+    # Set QSPI MODE for W6300
+    set(WIZCHIP_QSPI_MODE QSPI_QUAD_MODE)
+    # set(WIZCHIP_QSPI_MODE QSPI_DUAL_MODE)
+    # set(WIZCHIP_QSPI_MODE QSPI_SINGLE_MODE)
+
+    add_definitions(-D_WIZCHIP_QSPI_MODE_=${WIZCHIP_QSPI_MODE})
+
+else()
+    message(FATAL_ERROR "BOARD_NAME is wrong = ${BOARD_NAME}")
+endif()
+
+message(STATUS "WIZNET_CHIP = ${WIZNET_CHIP}")
+
+# Pull in WIZNET-PICO-C SDK version
+include(wiznet_pico_c_sdk_version.cmake)
+
+# Set the WIZNET_DIR and PORT_DIR
+if(NOT DEFINED WIZNET_DIR)
+    set(WIZNET_DIR ${CMAKE_SOURCE_DIR}/lib/WIZnet/ioLibrary_Driver)
+    message(STATUS "WIZNET_DIR = ${WIZNET_DIR}")
+endif()
+
+if(NOT DEFINED PORT_DIR)
+    set(PORT_DIR ${CMAKE_SOURCE_DIR}/lib/WIZnet/port)
+    message(STATUS "PORT_DIR = ${PORT_DIR}")
+endif()
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/lib/WIZnet)
+add_subdirectory(${PORT_DIR})
+
+# ===========================================================
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -58,7 +162,11 @@ target_link_libraries(pico-iiot-bridge
         pico_multicore
         FreeRTOS-Kernel
         FreeRTOS-Kernel-Heap4
-        freertos_config)
+        freertos_config
+        PORT_COMMON_FILES
+        ETHERNET_FILES
+        IOLIBRARY_FILES
+        LOOPBACK_FILES)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE
