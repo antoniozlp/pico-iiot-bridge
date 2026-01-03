@@ -5,6 +5,7 @@
 #include "wizchip_conf.h"
 #include "wizchip_spi.h"
 #include "loopback.h"
+#include "cli_task.h"
 
 #define LED_TOGGLE_RATE 100
 
@@ -66,9 +67,31 @@ int main()
     printf("Starting ...\n");
 
     xTaskCreate(vBlinkLedDemoTask, "Blink Task", 128, NULL, 1, NULL);
-    xTaskCreate(tcp_loopback_task, "TCP Loopback Task", 512, NULL, 2, NULL);
+    xTaskCreate(tcp_loopback_task, "TCP Loopback Task", 1024, NULL, 2, NULL);  // 4KB for network operations
+    vCreateCLITask();
 
     vTaskStartScheduler();
 
     return 0;
+}
+
+// FreeRTOS stack overflow hook - called when stack overflow is detected
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    // Disable interrupts to prevent further corruption
+    taskDISABLE_INTERRUPTS();
+    
+    // Print error message (if UART is still functional)
+    printf("\n\n*** STACK OVERFLOW DETECTED ***\n");
+    printf("Task: %s\n", pcTaskName);
+    printf("System halted.\n");
+    
+    // Halt the system
+    while(1) {
+        // Blink LED rapidly to indicate error
+        gpio_put(PICO_DEFAULT_LED_PIN, 1);
+        busy_wait_us(100000);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+        busy_wait_us(100000);
+    }
 }
