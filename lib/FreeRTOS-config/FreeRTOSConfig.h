@@ -82,8 +82,8 @@
 
 /* Run time and task stats gathering related definitions. */
 #define configGENERATE_RUN_TIME_STATS           0
-#define configUSE_TRACE_FACILITY                0
-#define configUSE_STATS_FORMATTING_FUNCTIONS    0
+#define configUSE_TRACE_FACILITY                1
+#define configUSE_STATS_FORMATTING_FUNCTIONS    1
 
 /* Co-routine related definitions. */
 #define configUSE_CO_ROUTINES                   0
@@ -94,6 +94,10 @@
 #define configTIMER_TASK_PRIORITY               ( configMAX_PRIORITIES - 1 )
 #define configTIMER_QUEUE_LENGTH                10
 #define configTIMER_TASK_STACK_DEPTH            1024
+
+/* CLI related definitions. */
+#define configCOMMAND_INT_MAX_OUTPUT_SIZE       1024
+#define configSTATS_BUFFER_MAX_LENGTH           configCOMMAND_INT_MAX_OUTPUT_SIZE
 
 /* Interrupt nesting behaviour configuration. */
 /*
