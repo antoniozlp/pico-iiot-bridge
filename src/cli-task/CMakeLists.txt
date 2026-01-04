@@ -13,5 +13,6 @@ target_link_libraries(cli-task INTERFACE
     hardware_watchdog
     FreeRTOS-Kernel
     FreeRTOS-Plus-CLI
+    pico_flash_storage
 )
 
