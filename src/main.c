@@ -6,6 +6,7 @@
 #include "wizchip_spi.h"
 #include "loopback.h"
 #include "cli_task.h"
+#include "pico_flash_storage.h"
 
 #define LED_TOGGLE_RATE 100
 
@@ -69,6 +70,8 @@ int main()
     xTaskCreate(vBlinkLedDemoTask, "Blink Task", 128, NULL, 1, NULL);
     xTaskCreate(tcp_loopback_task, "TCP Loopback Task", 1024, NULL, 2, NULL);  // 4KB for network operations
     vCreateCLITask();
+    
+    flash_storage_init();
 
     vTaskStartScheduler();
 

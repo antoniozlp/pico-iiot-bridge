@@ -149,6 +149,8 @@ add_subdirectory(${PORT_DIR})
 add_subdirectory(lib/FreeRTOS-Plus-CLI)
 add_subdirectory(src/cli-task)
 
+# ========================= Pico Flash Storage =========================
+add_subdirectory(src/pico-flash-storage)
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -172,7 +174,8 @@ target_link_libraries(pico-iiot-bridge
         ETHERNET_FILES
         IOLIBRARY_FILES
         LOOPBACK_FILES
-        cli-task)
+        cli-task
+        pico_flash_storage)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE
