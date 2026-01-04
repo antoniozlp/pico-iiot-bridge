@@ -27,6 +27,14 @@ static void vCLITask(void *pvParameters)
     int cRxedChar;
     int cInputIndex = 0;
     BaseType_t xMoreDataToFollow;
+    
+    // Adaptive polling configuration
+    #define POLL_FAST_MS    1      // Fast polling during data reception
+    #define POLL_SLOW_MS    100    // Slow polling when idle
+    #define IDLE_THRESHOLD  500    // Number of idle loops before slowing down (100ms at 1ms = 100ms idle)
+    
+    int poll_delay_ms = POLL_SLOW_MS;  // Start with slow polling
+    int idle_counter = 0;
 
     printf("\n\nFreeRTOS CLI task started.\nType 'help' to view a list of registered commands.\n\n> ");
 
@@ -62,7 +70,16 @@ static void vCLITask(void *pvParameters)
         else if (cRxedChar == PICO_ERROR_TIMEOUT) 
         {
              // No character received, yield to allow other tasks to run
-             vTaskDelay(1);
+             vTaskDelay(pdMS_TO_TICKS(poll_delay_ms));
+
+             // Switch to slow polling after idle period (only when in fast mode)
+             if (poll_delay_ms == POLL_FAST_MS) {
+                 idle_counter++;
+                 if (idle_counter >= IDLE_THRESHOLD) {
+                     poll_delay_ms = POLL_SLOW_MS;
+                     idle_counter = 0;
+                 }
+             }
         }
         else
         {
@@ -81,6 +98,12 @@ static void vCLITask(void *pvParameters)
                 cInputString[cInputIndex] = (char) cRxedChar;
                 cInputIndex++;
             }
+            
+            // Data received - switch to fast polling for responsive input
+            if (poll_delay_ms != POLL_FAST_MS) {
+                poll_delay_ms = POLL_FAST_MS;
+            }
+            idle_counter = 0;  // Reset idle counter
         }
     }
 }
