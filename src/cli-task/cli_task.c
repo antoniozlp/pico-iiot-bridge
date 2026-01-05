@@ -10,8 +10,8 @@
 #include "pico_flash_storage.h"
 
 // Definition of the task priority and stack size
-#define cliTASK_PRIORITY        ( tskIDLE_PRIORITY + 2 )
-#define cliTASK_STACK_SIZE      ( configMINIMAL_STACK_SIZE * 4 )  // 512 words = 2KB for CLI operations
+#define CLI_TASK_PRIORITY        ( tskIDLE_PRIORITY + 2 )
+#define CLI_TASK_STACK_SIZE      ( configMINIMAL_STACK_SIZE * 4 )  // 512 words = 2KB for CLI operations
 
 // Command buffer size
 #define MAX_INPUT_LENGTH        50
@@ -238,6 +238,6 @@ void vCreateCLITask(void)
     FreeRTOS_CLIRegisterCommand(&xFlashTest);
 
     // Create the task
-    xTaskCreate(vCLITask, "CLI_Task", cliTASK_STACK_SIZE, NULL, cliTASK_PRIORITY, NULL);
+    xTaskCreate(vCLITask, "CLI_Task", CLI_TASK_STACK_SIZE, NULL, CLI_TASK_PRIORITY, NULL);
 }
 
