@@ -152,6 +152,9 @@ add_subdirectory(src/cli-task)
 # ========================= Pico Flash Storage =========================
 add_subdirectory(src/pico-flash-storage)
 
+# ========================= Config =========================
+add_subdirectory(src/config)
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(pico-iiot-bridge src/main.c )
@@ -175,7 +178,8 @@ target_link_libraries(pico-iiot-bridge
         IOLIBRARY_FILES
         LOOPBACK_FILES
         cli-task
-        pico_flash_storage)
+        pico_flash_storage
+        config)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE

@@ -7,6 +7,7 @@
 #include "loopback.h"
 #include "cli_task.h"
 #include "pico_flash_storage.h"
+#include "config.h"
 
 #define LED_TOGGLE_RATE 100
 
@@ -44,6 +45,12 @@ int main()
 {
     stdio_init_all();
 
+    sleep_ms(1000);
+    printf("Starting ...\n");
+    
+    // Load configuration from flash
+    config_load_from_flash();
+
     // Initialize WizNet chip
     wizchip_spi_initialize();
     wizchip_cris_initialize();
@@ -52,21 +59,14 @@ int main()
     wizchip_check();
 
     // Configure network
-    wiz_NetInfo net_info = {
-        .mac = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56},
-        .ip = {192, 168, 11, 3},
-        .sn = {255, 255, 255, 0},
-        .gw = {192, 168, 11, 1},
-        .dns = {8, 8, 8, 8},
-        .dhcp = NETINFO_STATIC,
-    };
-    network_initialize(net_info);
-    print_network_information(net_info);
+    wiz_NetInfo net_config;
+    config_get_net_info(&net_config);
+    network_initialize(net_config);
+    print_network_information(net_config);
 
     sleep_ms(1000);
 
-    printf("Starting ...\n");
-
+    // Create tasks
     xTaskCreate(vBlinkLedDemoTask, "Blink Task", 128, NULL, 1, NULL);
     xTaskCreate(tcp_loopback_task, "TCP Loopback Task", 1024, NULL, 2, NULL);  // 4KB for network operations
     vCreateCLITask();
