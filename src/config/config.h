@@ -47,14 +47,14 @@ typedef struct
 
 
 void config_set_default(void);
-void config_load_from_flash(void);
-void config_save_to_flash(void);
-void config_get_version(config_version_t *version);
-void config_get_serial_config(serial_config_t *serial_config);
-void config_set_serial_config(serial_config_t *serial_config);
-void config_get_tcp_config(tcp_config_t *tcp_config);
-void config_set_tcp_config(tcp_config_t *tcp_config);
-void config_get_net_info(wiz_NetInfo *net_info);
-void config_set_net_info(wiz_NetInfo *net_info);
+bool config_load_from_flash(void);
+bool config_save_to_flash(void);
+bool config_get_version(config_version_t *version);
+bool config_get_serial_config(serial_config_t *serial_config);
+bool config_set_serial_config(serial_config_t *serial_config);
+bool config_get_tcp_config(tcp_config_t *tcp_config);
+bool config_set_tcp_config(tcp_config_t *tcp_config);
+bool config_get_net_info(wiz_NetInfo *net_info);
+bool config_set_net_info(wiz_NetInfo *net_info);
 
 #endif // _CONFIG_H_

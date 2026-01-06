@@ -48,8 +48,18 @@ int main()
     sleep_ms(1000);
     printf("Starting ...\n");
     
+    // Initialize flash storage before any tasks that might write to flash
+    flash_storage_init();
+    
     // Load configuration from flash
-    config_load_from_flash();
+    if (config_load_from_flash())
+    {
+        printf("Loaded configuration from flash successfully.\n");
+    }
+    else
+    {
+        printf("Using default configuration.\n");
+    }
 
     // Initialize WizNet chip
     wizchip_spi_initialize();
@@ -60,7 +70,11 @@ int main()
 
     // Configure network
     wiz_NetInfo net_config;
-    config_get_net_info(&net_config);
+    if (!config_get_net_info(&net_config))
+    {
+        printf("Error: Failed to get network configuration!\n");
+        return 1;
+    }
     network_initialize(net_config);
     print_network_information(net_config);
 
@@ -70,8 +84,6 @@ int main()
     xTaskCreate(vBlinkLedDemoTask, "Blink Task", 128, NULL, 1, NULL);
     xTaskCreate(tcp_loopback_task, "TCP Loopback Task", 1024, NULL, 2, NULL);  // 4KB for network operations
     vCreateCLITask();
-    
-    flash_storage_init();
 
     vTaskStartScheduler();
 
