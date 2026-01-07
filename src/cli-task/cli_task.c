@@ -3,6 +3,7 @@
 #include <FreeRTOS_CLI.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
@@ -166,6 +167,17 @@ static const CLI_Command_Definition_t xReboot =
     0
 };
 
+// Helper function to safely copy CLI parameter to null-terminated buffer
+// Returns true on success, false if parameter is too long
+static bool copy_param_to_buffer(const char *param, BaseType_t param_len, char *buf, size_t buf_size) {
+    if (param == NULL || param_len <= 0 || (size_t)param_len >= buf_size) {
+        return pdFALSE;
+    }
+    memcpy(buf, param, (size_t)param_len);
+    buf[param_len] = '\0';
+    return pdTRUE;
+}
+
 static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString){
 
     const char *pcParameter;
@@ -174,7 +186,14 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
     pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
 
     if(pcParameter == NULL){
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Use: config <read> <serial/network/tcp>\r\n");
+        snprintf(pcWriteBuffer, xWriteBufferLen, 
+                "Usage:\r\n"
+                "  config read <serial|network|tcp>\r\n"
+                "  config write serial <baud|databits|parity|stopbits|flowcts|flowrts> <value>\r\n"
+                "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
+                "  config write tcp <port|timeout|keepalive> <value>\r\n"
+                "  config save\r\n"
+                "Type 'help config' or 'config write' for more details.\r\n");
         return pdFALSE;
     }
 
@@ -202,7 +221,7 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Stopbits: %u\r\n", serial_config.stopbits);
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Flow Control CTS: %s\r\n", serial_config.flow_control_cts ? "Yes" : "No");
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Flow Control RTS: %s\r\n", serial_config.flow_control_rts ? "Yes" : "No");
-
+            return pdFALSE;
         }
         else if (strncmp(pcParameter, "network", xParameterStringLength) == 0) {
             wiz_NetInfo net_info;
@@ -224,6 +243,7 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
                            net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  DNS         : %d.%d.%d.%d\r\n", 
                            net_info.dns[0], net_info.dns[1], net_info.dns[2], net_info.dns[3]);
+            return pdFALSE;
         }
         else if (strncmp(pcParameter, "tcp", xParameterStringLength) == 0) {
             tcp_config_t tcp_config;
@@ -239,13 +259,294 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Timeout         : %u seconds\r\n", tcp_config.timeout_s);
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Keepalive       : %u seconds\r\n", tcp_config.keepalive_s);
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Max Connections : %u\r\n", tcp_config.max_connections);
+            return pdFALSE;
         }
         else {
             snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Option not supported. Use 'serial', 'network', or 'tcp'\r\n");
+            return pdFALSE;
         }
     }
+    else if (strncmp(pcParameter, "write", xParameterStringLength) == 0){
+        pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameterStringLength);
+        
+        if (pcParameter == NULL){
+            snprintf(pcWriteBuffer, xWriteBufferLen, 
+                    "Usage:\r\n"
+                    "  config write serial baud <9600-921600>\r\n"
+                    "  config write serial databits <5-8>\r\n"
+                    "  config write serial parity <none|even|odd>\r\n"
+                    "  config write serial stopbits <1|2>\r\n"
+                    "  config write serial flowcts <0|1>\r\n"
+                    "  config write serial flowrts <0|1>\r\n"
+                    "  config write network ip <a.b.c.d>\r\n"
+                    "  config write network subnet <a.b.c.d>\r\n"
+                    "  config write network gateway <a.b.c.d>\r\n"
+                    "  config write network dns <a.b.c.d>\r\n"
+                    "  config write tcp port <1024-65535>\r\n"
+                    "  config write tcp timeout <1-3600>\r\n"
+                    "  config write tcp keepalive <1-600>\r\n");
+            return pdFALSE;
+        }
+
+        // === SERIAL CONFIGURATION ===
+        if (strncmp(pcParameter, "serial", xParameterStringLength) == 0){
+            BaseType_t xFieldLength, xValueLength;
+            const char *pcField = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xFieldLength);
+            const char *pcValue = FreeRTOS_CLIGetParameter(pcCommandString, 4, &xValueLength);
+            
+            if (pcField == NULL || pcValue == NULL) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Usage: config write serial <field> <value>\r\n"
+                        "Fields: baud, databits, parity, stopbits, flowcts, flowrts\r\n");
+                return pdFALSE;
+            }
+            
+            serial_config_t serial_config;
+            if (!config_get_serial_config(&serial_config)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get serial config\r\n");
+                return pdFALSE;
+            }
+            
+            if (strncmp(pcField, "baud", 4) == 0) {
+                char value_buf[16];
+                if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                    return pdFALSE;
+                }
+                int baud_val = atoi(value_buf);
+                if (baud_val < 9600 || baud_val > 921600) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid baudrate. Use 9600-921600\r\n");
+                    return pdFALSE;
+                }
+                serial_config.baud = (uint32_t)baud_val;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Serial baudrate set to %d\r\n", baud_val);
+            }
+            else if (strncmp(pcField, "databits", 8) == 0) {
+                char value_buf[16];
+                if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                    return pdFALSE;
+                }
+                int databits_val = atoi(value_buf);
+                if (databits_val < 5 || databits_val > 8) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Databits must be 5-8\r\n");
+                    return pdFALSE;
+                }
+                serial_config.databits = (uint8_t)databits_val;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Serial databits set to %d\r\n", databits_val);
+            }
+            else if (strncmp(pcField, "parity", 6) == 0) {
+                char value_buf[16];
+                if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                    return pdFALSE;
+                }
+                if (strcmp(value_buf, "none") == 0 || strcmp(value_buf, "0") == 0) {
+                    serial_config.parity = UART_PARITY_NONE;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Serial parity set to NONE\r\n");
+                }
+                else if (strcmp(value_buf, "even") == 0 || strcmp(value_buf, "1") == 0) {
+                    serial_config.parity = UART_PARITY_EVEN;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Serial parity set to EVEN\r\n");
+                }
+                else if (strcmp(value_buf, "odd") == 0 || strcmp(value_buf, "2") == 0) {
+                    serial_config.parity = UART_PARITY_ODD;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Serial parity set to ODD\r\n");
+                }
+                else {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Parity must be none, even, or odd\r\n");
+                    return pdFALSE;
+                }
+            }
+            else if (strncmp(pcField, "stopbits", 8) == 0) {
+                char value_buf[16];
+                if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                    return pdFALSE;
+                }
+                int stopbits_val = atoi(value_buf);
+                if (stopbits_val != 1 && stopbits_val != 2) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Stopbits must be 1 or 2\r\n");
+                    return pdFALSE;
+                }
+                serial_config.stopbits = (uint8_t)stopbits_val;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Serial stopbits set to %d\r\n", stopbits_val);
+            }
+            else if (strncmp(pcField, "flowcts", 7) == 0) {
+                char value_buf[16];
+                if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                    return pdFALSE;
+                }
+                int val = atoi(value_buf);
+                serial_config.flow_control_cts = (val != 0);
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Serial CTS flow control %s\r\n", 
+                        serial_config.flow_control_cts ? "enabled" : "disabled");
+            }
+            else if (strncmp(pcField, "flowrts", 7) == 0) {
+                char value_buf[16];
+                if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                    return pdFALSE;
+                }
+                int val = atoi(value_buf);
+                serial_config.flow_control_rts = (val != 0);
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Serial RTS flow control %s\r\n", 
+                        serial_config.flow_control_rts ? "enabled" : "disabled");
+            }
+            else {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Unknown serial field '%.*s'\r\n", 
+                        (int)xFieldLength, pcField);
+                return pdFALSE;
+            }
+            
+            if (!config_set_serial_config(&serial_config)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to set serial config\r\n");
+                return pdFALSE;
+            }
+            return pdFALSE;
+        }
+        // === NETWORK CONFIGURATION ===
+        else if (strncmp(pcParameter, "network", xParameterStringLength) == 0) {
+            BaseType_t xFieldLength, xValueLength;
+            const char *pcField = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xFieldLength);
+            const char *pcValue = FreeRTOS_CLIGetParameter(pcCommandString, 4, &xValueLength);
+            
+            if (pcField == NULL || pcValue == NULL) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Usage: config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n");
+                return pdFALSE;
+            }
+            
+            // Copy value to null-terminated buffer
+            char value_buf[32];
+            if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                return pdFALSE;
+            }
+            
+            wiz_NetInfo net_info;
+            if (!config_get_net_info(&net_info)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get network config\r\n");
+                return pdFALSE;
+            }
+            
+            // Parse IP address string (a.b.c.d)
+            unsigned int a, b, c, d;
+            if (sscanf(value_buf, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 || 
+                a > 255 || b > 255 || c > 255 || d > 255) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid IP format. Use a.b.c.d\r\n");
+                return pdFALSE;
+            }
+            
+            if (strncmp(pcField, "ip", 2) == 0) {
+                net_info.ip[0] = a; net_info.ip[1] = b; net_info.ip[2] = c; net_info.ip[3] = d;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "IP address set to %u.%u.%u.%u\r\n", a, b, c, d);
+            }
+            else if (strncmp(pcField, "subnet", 6) == 0 || strncmp(pcField, "sn", 2) == 0) {
+                net_info.sn[0] = a; net_info.sn[1] = b; net_info.sn[2] = c; net_info.sn[3] = d;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Subnet mask set to %u.%u.%u.%u\r\n", a, b, c, d);
+            }
+            else if (strncmp(pcField, "gateway", 7) == 0 || strncmp(pcField, "gw", 2) == 0) {
+                net_info.gw[0] = a; net_info.gw[1] = b; net_info.gw[2] = c; net_info.gw[3] = d;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Gateway set to %u.%u.%u.%u\r\n", a, b, c, d);
+            }
+            else if (strncmp(pcField, "dns", 3) == 0) {
+                net_info.dns[0] = a; net_info.dns[1] = b; net_info.dns[2] = c; net_info.dns[3] = d;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "DNS set to %u.%u.%u.%u\r\n", a, b, c, d);
+            }
+            else {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Unknown network field. Use ip, subnet, gateway, or dns\r\n");
+                return pdFALSE;
+            }
+            
+            if (!config_set_net_info(&net_info)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to set network config\r\n");
+                return pdFALSE;
+            }
+            return pdFALSE;
+        }
+        // === TCP CONFIGURATION ===
+        else if (strncmp(pcParameter, "tcp", xParameterStringLength) == 0) {
+            BaseType_t xFieldLength, xValueLength;
+            const char *pcField = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xFieldLength);
+            const char *pcValue = FreeRTOS_CLIGetParameter(pcCommandString, 4, &xValueLength);
+            
+            if (pcField == NULL || pcValue == NULL) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Usage: config write tcp <port|timeout|keepalive> <value>\r\n");
+                return pdFALSE;
+            }
+            
+            tcp_config_t tcp_config;
+            if (!config_get_tcp_config(&tcp_config)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get TCP config\r\n");
+                return pdFALSE;
+            }
+            
+            char value_buf[16];
+            if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                return pdFALSE;
+            }
+            
+            if (strncmp(pcField, "port", 4) == 0) {
+                int port_value = atoi(value_buf);
+                if (port_value < 1024 || port_value > 65535) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Port must be 1024-65535\r\n");
+                    return pdFALSE;
+                }
+                tcp_config.local_port = (uint16_t)port_value;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "TCP port set to %d\r\n", port_value);
+            }
+            else if (strncmp(pcField, "timeout", 7) == 0) {
+                int timeout_val = atoi(value_buf);
+                if (timeout_val <= 0 || timeout_val > 3600) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Timeout must be 1-3600 seconds\r\n");
+                    return pdFALSE;
+                }
+                tcp_config.timeout_s = (uint16_t)timeout_val;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "TCP timeout set to %d seconds\r\n", timeout_val);
+            }
+            else if (strncmp(pcField, "keepalive", 9) == 0) {
+                int keepalive_val = atoi(value_buf);
+                if (keepalive_val <= 0 || keepalive_val > 600) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Keepalive must be 1-600 seconds\r\n");
+                    return pdFALSE;
+                }
+                tcp_config.keepalive_s = (uint16_t)keepalive_val;
+                snprintf(pcWriteBuffer, xWriteBufferLen, "TCP keepalive set to %d seconds\r\n", keepalive_val);
+            }
+            else {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Unknown TCP field. Use port, timeout, or keepalive\r\n");
+                return pdFALSE;
+            }
+            
+            if (!config_set_tcp_config(&tcp_config)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to set TCP config\r\n");
+                return pdFALSE;
+            }
+            return pdFALSE;
+        }
+        else {
+            snprintf(pcWriteBuffer, xWriteBufferLen, 
+                    "Error: Unknown config type. Use 'serial', 'network', or 'tcp'\r\n");
+            return pdFALSE;
+        }
+    }
+    else if (strncmp(pcParameter, "save", xParameterStringLength) == 0){
+        // Save configuration to flash
+        if (config_save_to_flash()) {
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Configuration saved to flash successfully.\r\n");
+        } else {
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to save configuration to flash.\r\n");
+        }
+        return pdFALSE;
+    }
     else {
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Unknown command '%.*s'. Use: config read <serial/network/tcp>\r\n", 
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Unknown command '%.*s'. Use: config <read|write|save>\r\n", 
                  (int)xParameterStringLength, pcParameter);
     }
     return pdFALSE;
@@ -253,9 +554,16 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
 
 static const CLI_Command_Definition_t xConfig = {
     "config",
-    "\r\nconfig <read> <serial/network/tcp>\n\r",
+    "\r\nconfig - Configuration management\r\n"
+    "Usage:\r\n"
+    "  config read <serial|network|tcp>\r\n"
+    "  config write serial <baud|databits|parity|stopbits|flowcts|flowrts> <value>\r\n"
+    "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
+    "  config write tcp <port|timeout|keepalive> <value>\r\n"
+    "  config save\r\n"
+    "Type 'config write' for detailed parameter ranges.\r\n",
     prvConfigCommand,
-    2
+    -1  // Variable number of parameters
 
 };
 
