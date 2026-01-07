@@ -4,12 +4,16 @@
 #include <stdint.h>
 #include "wizchip_conf.h"
 #include "hardware/uart.h"
+#include "hardware/flash.h"
 
 // Flash configuration
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
 #define CONFIG_VERSION_MAJOR 0
 #define CONFIG_VERSION_MINOR 0
 #define CONFIG_VERSION_PATCH 1
+
+// Calculate buffer size for flash operations (rounded up to page boundary)
+#define CONFIG_BUFFER_SIZE ((sizeof(system_config_t) + FLASH_PAGE_SIZE - 1) & ~(FLASH_PAGE_SIZE - 1))
 
 
 typedef struct

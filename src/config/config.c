@@ -92,32 +92,30 @@ bool config_save_to_flash(void)
     // If no changes have been made skip saving to avoid unnecessary writes
     if (!g_config_changed)
     {
-        printf("No configuration changes to save. Skipping.\n");
         return true;  // Nothing to save, considered success
     }
-    
-    // Prepare buffer (flash write size must be multiple of FLASH_PAGE_SIZE = 256)
-    // We erase a sector (4096) and program.
-    // Ensure structure fits in sector.
+
+    // Ensure configuration fits in one sector
     if (sizeof(system_config_t) > FLASH_SECTOR_SIZE)
     {
-        printf("Error: Configuration too large for one sector!\n");
         return false;
     }
 
-    uint8_t buf[FLASH_SECTOR_SIZE];
-    memset(buf, 0xFF, FLASH_SECTOR_SIZE); // 0xFF is erased state
+    // Prepare buffer to write to flash
+    // Note: flash_storage_write() will erase a full sector (4096 bytes), which sets
+    // all bytes to 0xFF. We only program CONFIG_BUFFER_SIZE bytes here. The remaining
+    // portion of the sector will remain at 0xFF (erased state), which is correct.
+    static uint8_t buf[CONFIG_BUFFER_SIZE];
+    memset(buf, 0xFF, CONFIG_BUFFER_SIZE); // 0xFF is erased flash state
     memcpy(buf, &g_sys_cfg, sizeof(system_config_t));
 
-    if (flash_storage_write(FLASH_TARGET_OFFSET, buf, sizeof(system_config_t)))
+    if (flash_storage_write(FLASH_TARGET_OFFSET, buf, CONFIG_BUFFER_SIZE))
     {
-        printf("Configuration saved to flash.\n");
         g_config_changed = false;  // Reset flag after successful save
         return true;
     }
     else
     {
-        printf("Failed to save configuration to flash.\n");
         return false;
     }
 }
