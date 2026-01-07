@@ -244,6 +244,10 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
             snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Option not supported. Use 'serial', 'network', or 'tcp'\r\n");
         }
     }
+    else {
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Unknown command '%.*s'. Use: config read <serial/network/tcp>\r\n", 
+                 (int)xParameterStringLength, pcParameter);
+    }
     return pdFALSE;
 }
 
