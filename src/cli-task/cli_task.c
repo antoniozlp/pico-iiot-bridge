@@ -166,72 +166,6 @@ static const CLI_Command_Definition_t xReboot =
     0
 };
 
-// --- Flash Test Command ---
-static BaseType_t prvFlashTestCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
-{
-    const char *pcParameter;
-    BaseType_t xParameterStringLength;
-    // Use last 64KB of 2MB flash for persistent config (safe from firmware updates)
-    // For 4MB flash, use 0x3F0000 instead
-    uint32_t offset = 0x1F0000; // Last 64KB block (1,984KB offset)
-    char buffer[256];
-
-    // Get the first parameter (operation: read/write)
-    pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
-
-    if (pcParameter == NULL)
-    {
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Usage: flash-test <write/read> [data]\r\n");
-        return pdFALSE;
-    }
-
-    if (strncmp(pcParameter, "write", xParameterStringLength) == 0)
-    {
-        // Get second parameter (data)
-        pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameterStringLength);
-        if (pcParameter == NULL)
-        {
-            snprintf(pcWriteBuffer, xWriteBufferLen, "Usage: flash-test write <data>\r\n");
-            return pdFALSE;
-        }
-
-        // Copy data to buffer (max 255 chars)
-        size_t len = (xParameterStringLength > 255) ? 255 : xParameterStringLength;
-        memcpy(buffer, pcParameter, len);
-        buffer[len] = '\0';
-
-        if (flash_storage_write(offset, (uint8_t *)buffer, len + 1))
-        {
-            snprintf(pcWriteBuffer, xWriteBufferLen, "Written to flash at offset 0x%x: %s\r\n", (unsigned int)offset, buffer);
-        }
-        else
-        {
-            snprintf(pcWriteBuffer, xWriteBufferLen, "Failed to write to flash.\r\n");
-        }
-    }
-    else if (strncmp(pcParameter, "read", xParameterStringLength) == 0)
-    {
-        flash_storage_read(offset, (uint8_t *)buffer, 256);
-        // Ensure null termination for printing safety
-        buffer[255] = '\0'; 
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Read from flash at offset 0x%x: %s\r\n", (unsigned int)offset, buffer);
-    }
-    else
-    {
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Unknown operation.\r\n");
-    }
-
-    return pdFALSE;
-}
-
-static const CLI_Command_Definition_t xFlashTest =
-{
-    "flash-test",
-    "\r\nflash-test <write/read> [data]:\r\n Write or read a string from flash memory\r\n",
-    prvFlashTestCommand,
-    -1 // Variable number of parameters
-};
-
 static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString){
 
     const char *pcParameter;
@@ -326,7 +260,6 @@ void vCreateCLITask(void)
     // Register commands
     FreeRTOS_CLIRegisterCommand(&xTaskStats);
     FreeRTOS_CLIRegisterCommand(&xReboot);
-    FreeRTOS_CLIRegisterCommand(&xFlashTest);
     FreeRTOS_CLIRegisterCommand(&xConfig);
 
     // Create the task
