@@ -14,5 +14,6 @@ target_link_libraries(cli-task INTERFACE
     FreeRTOS-Kernel
     FreeRTOS-Plus-CLI
     pico_flash_storage
+    config
 )
 

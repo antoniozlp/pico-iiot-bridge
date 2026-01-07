@@ -41,7 +41,7 @@ void config_set_default(void)
     g_sys_cfg.net_info.dhcp = NETINFO_STATIC;
 
     // Serial defaults
-    g_sys_cfg.serial.baud = 57600;
+    g_sys_cfg.serial.baud = 115200;
     g_sys_cfg.serial.databits = 8;
     g_sys_cfg.serial.parity = UART_PARITY_NONE;
     g_sys_cfg.serial.stopbits = 1;

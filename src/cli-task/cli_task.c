@@ -8,6 +8,8 @@
 #include "hardware/watchdog.h"
 #include "cli_task.h"
 #include "pico_flash_storage.h"
+#include "config.h"
+#include "wizchip_conf.h"
 
 // Definition of the task priority and stack size
 #define CLI_TASK_PRIORITY        ( tskIDLE_PRIORITY + 2 )
@@ -230,12 +232,102 @@ static const CLI_Command_Definition_t xFlashTest =
     -1 // Variable number of parameters
 };
 
+static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString){
+
+    const char *pcParameter;
+    BaseType_t xParameterStringLength;
+
+    pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xParameterStringLength);
+
+    if(pcParameter == NULL){
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Use: config <read> <serial/network/tcp>\r\n");
+        return pdFALSE;
+    }
+
+    if (strncmp(pcParameter, "read", xParameterStringLength) == 0){
+        pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameterStringLength);
+        
+        if (pcParameter == NULL){
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Missing config type. Use 'serial', 'network', or 'tcp'\r\n");
+            return pdFALSE;
+        }
+
+        if (strncmp(pcParameter, "serial", xParameterStringLength) == 0){
+            serial_config_t serial_config;
+            if (!config_get_serial_config(&serial_config))
+            {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get serial config\r\n");
+                return pdFALSE;
+            }
+            
+            size_t len = 0;
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "Serial Configuration:\r\n");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Baudrate: %u\r\n", (unsigned int)serial_config.baud);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Databits: %u\r\n", serial_config.databits);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Parity: %d\r\n", serial_config.parity);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Stopbits: %u\r\n", serial_config.stopbits);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Flow Control CTS: %s\r\n", serial_config.flow_control_cts ? "Yes" : "No");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Flow Control RTS: %s\r\n", serial_config.flow_control_rts ? "Yes" : "No");
+
+        }
+        else if (strncmp(pcParameter, "network", xParameterStringLength) == 0) {
+            wiz_NetInfo net_info;
+            if (!config_get_net_info(&net_info))
+            {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get network config\r\n");
+                return pdFALSE;
+            }
+            
+            size_t len = 0;
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "Network Configuration:\r\n");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  MAC         : %02X:%02X:%02X:%02X:%02X:%02X\r\n", 
+                           net_info.mac[0], net_info.mac[1], net_info.mac[2], net_info.mac[3], net_info.mac[4], net_info.mac[5]);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  IP          : %d.%d.%d.%d\r\n", 
+                           net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3]);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Subnet Mask : %d.%d.%d.%d\r\n", 
+                           net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3]);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Gateway     : %d.%d.%d.%d\r\n", 
+                           net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  DNS         : %d.%d.%d.%d\r\n", 
+                           net_info.dns[0], net_info.dns[1], net_info.dns[2], net_info.dns[3]);
+        }
+        else if (strncmp(pcParameter, "tcp", xParameterStringLength) == 0) {
+            tcp_config_t tcp_config;
+            if (!config_get_tcp_config(&tcp_config))
+            {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get TCP config\r\n");
+                return pdFALSE;
+            }
+            
+            size_t len = 0;
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "TCP Configuration:\r\n");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Local Port      : %u\r\n", tcp_config.local_port);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Timeout         : %u seconds\r\n", tcp_config.timeout_s);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Keepalive       : %u seconds\r\n", tcp_config.keepalive_s);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Max Connections : %u\r\n", tcp_config.max_connections);
+        }
+        else {
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Option not supported. Use 'serial', 'network', or 'tcp'\r\n");
+        }
+    }
+    return pdFALSE;
+}
+
+static const CLI_Command_Definition_t xConfig = {
+    "config",
+    "\r\nconfig <read> <serial/network/tcp>\n\r",
+    prvConfigCommand,
+    2
+
+};
+
 void vCreateCLITask(void)
 {
     // Register commands
     FreeRTOS_CLIRegisterCommand(&xTaskStats);
     FreeRTOS_CLIRegisterCommand(&xReboot);
     FreeRTOS_CLIRegisterCommand(&xFlashTest);
+    FreeRTOS_CLIRegisterCommand(&xConfig);
 
     // Create the task
     xTaskCreate(vCLITask, "CLI_Task", CLI_TASK_STACK_SIZE, NULL, CLI_TASK_PRIORITY, NULL);
