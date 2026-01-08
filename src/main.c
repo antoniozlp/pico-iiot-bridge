@@ -8,6 +8,8 @@
 #include "cli_task.h"
 #include "pico_flash_storage.h"
 #include "config.h"
+#include "http_utils.h"
+#include "web_page.h"
 
 #define LED_TOGGLE_RATE 100
 
@@ -27,16 +29,35 @@ void vBlinkLedDemoTask(void *pvParameters){
 // Global buffer for TCP server
 static uint8_t g_tcp_server_buf[2048];
 
+
+/* HTTP */
+
+#define HTTP_SOCKET_MAX_NUM 2
+static uint8_t g_http_send_buf[2048] = {
+    0,
+};
+static uint8_t g_http_recv_buf[2048] = {
+    0,
+};
+static uint8_t g_http_socket_num_list[HTTP_SOCKET_MAX_NUM] = {0, 1};
+
+
+
 void tcp_loopback_task(void *pvParameters) {
     printf("TCP Loopback server started on port 5000\n");
 
     // IMPORTANT: Tasks must never return!
     while(1) {
-        int response = loopback_tcps(0, g_tcp_server_buf, 5000);
+        int response = loopback_tcps(3, g_tcp_server_buf, 5000);
         if (response < 0) {
             printf("Error: %d\n", response);
         }
         vTaskDelay(pdMS_TO_TICKS(10)); // Small delay
+
+        /* Run HTTP server for testing purposes now */
+        for (uint8_t i = 0; i < HTTP_SOCKET_MAX_NUM; i++) {
+            httpServer_run(i);
+        }
     }
 }
 
@@ -79,6 +100,12 @@ int main()
     print_network_information(net_config);
 
     sleep_ms(1000);
+
+    /* Initialize HTTP Server */
+    httpServer_init(g_http_send_buf, g_http_recv_buf, HTTP_SOCKET_MAX_NUM, g_http_socket_num_list);
+    /* Register web page */
+    reg_httpServer_webContent("index.html", index_page);
+
 
     // Create tasks
     xTaskCreate(vBlinkLedDemoTask, "Blink Task", 128, NULL, 1, NULL);
