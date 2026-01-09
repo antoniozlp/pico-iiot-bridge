@@ -1,5 +1,5 @@
-#ifndef _CONFIG_H_
-#define _CONFIG_H_
+#ifndef _SYSTEM_CONFIG_H_
+#define _SYSTEM_CONFIG_H_
 
 #include <stdint.h>
 #include "wizchip_conf.h"
@@ -61,4 +61,4 @@ bool config_set_tcp_config(tcp_config_t *tcp_config);
 bool config_get_net_info(wiz_NetInfo *net_info);
 bool config_set_net_info(wiz_NetInfo *net_info);
 
-#endif // _CONFIG_H_
+#endif // _SYSTEM_CONFIG_H_

@@ -9,7 +9,7 @@
 #include "hardware/watchdog.h"
 #include "cli_task.h"
 #include "pico_flash_storage.h"
-#include "config.h"
+#include "system_config.h"
 #include "wizchip_conf.h"
 
 // Definition of the task priority and stack size

@@ -9,7 +9,7 @@
 #include "pico/stdlib.h"
 #include "httpUtil.h"
 #include "http_utils.h"
-#include "config.h"
+#include "system_config.h"
 
 static void copy_text(char *dst, size_t dst_len, const uint8_t *src)
 {

@@ -7,7 +7,7 @@
 #include "loopback.h"
 #include "cli_task.h"
 #include "pico_flash_storage.h"
-#include "config.h"
+#include "system_config.h"
 #include "http_utils.h"
 #include "web_page.h"
 

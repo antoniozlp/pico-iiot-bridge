@@ -1,15 +1,9 @@
+# Add subdirectories for system and board configuration
+add_subdirectory(system_config)
+
+# Create a top-level config library that includes both
 add_library(config INTERFACE)
 
-target_sources(config INTERFACE
-    ${CMAKE_CURRENT_LIST_DIR}/config.c
-)
-
-target_include_directories(config INTERFACE
-    ${CMAKE_CURRENT_LIST_DIR}
-)
-
 target_link_libraries(config INTERFACE
-    pico_stdlib
-    hardware_flash
-    pico_flash_storage
+    system_config
 )

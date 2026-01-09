@@ -3,7 +3,7 @@
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "pico/flash.h"
-#include "config.h"
+#include "system_config.h"
 #include "pico/stdio_uart.h"
 #include "pico_flash_storage.h"
 
