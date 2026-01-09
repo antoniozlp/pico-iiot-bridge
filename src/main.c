@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "FreeRTOS.h"
@@ -8,21 +9,33 @@
 #include "cli_task.h"
 #include "pico_flash_storage.h"
 #include "system_config.h"
+#include "board_config.h"
 #include "http_utils.h"
 #include "web_page.h"
 
-#define LED_TOGGLE_RATE 100
+#define LED_TOGGLE_RATE 500
 
 // Blink the LED on the Pico using FreeRTOS Demo Task
 void vBlinkLedDemoTask(void *pvParameters){
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    serial_config_t serial_config;
+    if (!config_get_serial_config(&serial_config))
+    {
+        printf("Error: Failed to get serial configuration!\n");
+        return;
+    }
+    board_init_uart(BOARD_UART1_ID, &serial_config);
+    uint32_t count = 0;
+    uint8_t buf[100] = {0};
 
     while(1){
-        gpio_put(PICO_DEFAULT_LED_PIN, 1);
+        gpio_put(BOARD_LED_PIN, 1);
         vTaskDelay(pdMS_TO_TICKS(LED_TOGGLE_RATE));
-        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+        gpio_put(BOARD_LED_PIN, 0);
         vTaskDelay(pdMS_TO_TICKS(LED_TOGGLE_RATE));
+
+        sprintf((char *)buf, "LED count: %d\r", count);
+        uart_puts(BOARD_UART1_ID, (const char *)buf);
+        count++;
     }
 }
 
@@ -65,6 +78,8 @@ void tcp_loopback_task(void *pvParameters) {
 int main()
 {
     stdio_init_all();
+
+    board_init_gpio();
 
     sleep_ms(1000);
     printf("Starting ...\n");

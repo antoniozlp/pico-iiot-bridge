@@ -183,6 +183,7 @@ target_link_libraries(pico-iiot-bridge
         cli-task
         pico_flash_storage
         system_config
+        board_config
         http_server)
 
 # Add the standard include files to the build
