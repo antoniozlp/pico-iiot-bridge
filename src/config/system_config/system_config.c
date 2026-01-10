@@ -22,9 +22,9 @@ void config_set_default(void)
     memset(&g_sys_cfg, 0, sizeof(system_config_t));
 
     // Version defaults
-    g_sys_cfg.version.major = 0;
-    g_sys_cfg.version.minor = 0;
-    g_sys_cfg.version.patch = 1;
+    g_sys_cfg.version.major = CONFIG_VERSION_MAJOR;
+    g_sys_cfg.version.minor = CONFIG_VERSION_MINOR;
+    g_sys_cfg.version.patch = CONFIG_VERSION_PATCH;
 
     // Network defaults
     uint8_t mac[6] = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56};
@@ -40,19 +40,34 @@ void config_set_default(void)
     memcpy(g_sys_cfg.net_info.dns, dns, 4);
     g_sys_cfg.net_info.dhcp = NETINFO_STATIC;
 
-    // Serial defaults
-    g_sys_cfg.serial.baud = 115200;
-    g_sys_cfg.serial.databits = 8;
-    g_sys_cfg.serial.parity = UART_PARITY_NONE;
-    g_sys_cfg.serial.stopbits = 1;
-    g_sys_cfg.serial.flow_control_cts = false;
-    g_sys_cfg.serial.flow_control_rts = false;
+    // Serial0 defaults (Debug/Console UART)
+    g_sys_cfg.serial0.baud = 115200;
+    g_sys_cfg.serial0.databits = 8;
+    g_sys_cfg.serial0.parity = UART_PARITY_NONE;
+    g_sys_cfg.serial0.stopbits = 1;
+    g_sys_cfg.serial0.flow_control_cts = false;
+    g_sys_cfg.serial0.flow_control_rts = false;
 
-    // TCP defaults
-    g_sys_cfg.tcp.local_port = 5000;
-    g_sys_cfg.tcp.timeout_s = 30;
-    g_sys_cfg.tcp.keepalive_s = 5;
-    g_sys_cfg.tcp.max_connections = 1;
+    // Serial1 defaults (Serial Bridge UART)
+    g_sys_cfg.serial1.baud = 115200;
+    g_sys_cfg.serial1.databits = 8;
+    g_sys_cfg.serial1.parity = UART_PARITY_NONE;
+    g_sys_cfg.serial1.stopbits = 1;
+    g_sys_cfg.serial1.flow_control_cts = false;
+    g_sys_cfg.serial1.flow_control_rts = false;
+
+    // Serial-to-TCP mode defaults
+    g_sys_cfg.serial_to_tcp_mode.enable = 0;  // Disabled by default
+    g_sys_cfg.serial_to_tcp_mode.serial_id = 1;  // Use UART1 by default
+    g_sys_cfg.serial_to_tcp_mode.mode = TCP_MODE_SERVER;
+    g_sys_cfg.serial_to_tcp_mode.local_port = 5000;
+    g_sys_cfg.serial_to_tcp_mode.timeout_s = 30;
+    g_sys_cfg.serial_to_tcp_mode.keepalive_s = 5;
+    g_sys_cfg.serial_to_tcp_mode.max_connections = 1;
+    // Client mode defaults (not used when in server mode)
+    uint8_t default_remote_ip[4] = {192, 168, 11, 100};
+    memcpy(g_sys_cfg.serial_to_tcp_mode.remote_ip, default_remote_ip, 4);
+    g_sys_cfg.serial_to_tcp_mode.remote_port = 5001;
 }
 
 bool config_load_from_flash(void)
@@ -130,51 +145,62 @@ bool config_get_version(config_version_t *version)
     return false;
 }
 
-bool config_get_serial_config(serial_config_t *serial_config)
+bool config_get_serial_config(uint8_t uart_id, serial_config_t *serial_config)
 {
-    if (serial_config != NULL && g_config_loaded)
-    {
-        memcpy(serial_config, &g_sys_cfg.serial, sizeof(serial_config_t));
-        return true;
-    }
-    return false;
-}
-
-bool config_set_serial_config(serial_config_t *serial_config)
-{
-    if (serial_config == NULL || !g_config_loaded)
+    if (serial_config == NULL || !g_config_loaded || uart_id > 1)
     {
         return false;
     }
     
-    if (memcmp(&g_sys_cfg.serial, serial_config, sizeof(serial_config_t)) != 0)
+    if (uart_id == 0)
     {
-        memcpy(&g_sys_cfg.serial, serial_config, sizeof(serial_config_t));
+        memcpy(serial_config, &g_sys_cfg.serial0, sizeof(serial_config_t));
+    }
+    else
+    {
+        memcpy(serial_config, &g_sys_cfg.serial1, sizeof(serial_config_t));
+    }
+    return true;
+}
+
+bool config_set_serial_config(uint8_t uart_id, serial_config_t *serial_config)
+{
+    if (serial_config == NULL || !g_config_loaded || uart_id > 1)
+    {
+        return false;
+    }
+    
+    serial_config_t *target = (uart_id == 0) ? &g_sys_cfg.serial0 : &g_sys_cfg.serial1;
+    
+    if (memcmp(target, serial_config, sizeof(serial_config_t)) != 0)
+    {
+        memcpy(target, serial_config, sizeof(serial_config_t));
         g_config_changed = true;
     }
     return true;
 }
 
-bool config_get_tcp_config(tcp_config_t *tcp_config)
+bool config_get_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config)
 {
-    if (tcp_config != NULL && g_config_loaded)
-    {
-        memcpy(tcp_config, &g_sys_cfg.tcp, sizeof(tcp_config_t));
-        return true;
-    }
-    return false;
-}
-
-bool config_set_tcp_config(tcp_config_t *tcp_config)
-{
-    if (tcp_config == NULL || !g_config_loaded)
+    if (mode_config == NULL || !g_config_loaded)
     {
         return false;
     }
     
-    if (memcmp(&g_sys_cfg.tcp, tcp_config, sizeof(tcp_config_t)) != 0)
+    memcpy(mode_config, &g_sys_cfg.serial_to_tcp_mode, sizeof(serial_to_tcp_mode_config_t));
+    return true;
+}
+
+bool config_set_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config)
+{
+    if (mode_config == NULL || !g_config_loaded)
     {
-        memcpy(&g_sys_cfg.tcp, tcp_config, sizeof(tcp_config_t));
+        return false;
+    }
+    
+    if (memcmp(&g_sys_cfg.serial_to_tcp_mode, mode_config, sizeof(serial_to_tcp_mode_config_t)) != 0)
+    {
+        memcpy(&g_sys_cfg.serial_to_tcp_mode, mode_config, sizeof(serial_to_tcp_mode_config_t));
         g_config_changed = true;
     }
     return true;
