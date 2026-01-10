@@ -18,7 +18,7 @@
         "<div class=\"menu-item active\" onclick=\"showPage('home')\">Home</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('network')\">Network</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('serial')\">Serial</div>"\
-        "<div class=\"menu-item\" onclick=\"showPage('tcp')\">TCP</div>"\
+        "<div class=\"menu-item\" onclick=\"showPage('s2tcp')\">Serial to TCP</div>"\
     "</div>"
 
 #define HTML_CONTENT_START \

@@ -11,6 +11,7 @@
     ".menu-item.active{background:#e6f0ff;color:#1d78ff;font-weight:600;}"\
     ".content{flex:1;padding:32px;overflow-y:auto;}"\
     "h1{margin:0 0 8px;font-size:24px;}"\
+    "h3{margin:24px 0 8px;font-size:18px;color:#555;}"\
     ".desc{color:#666;margin-bottom:24px;}"\
     "section{background:#fff;border:1px solid #dce1eb;border-radius:8px;padding:24px;margin-bottom:24px;display:none;}"\
     "section.visible{display:block;}"\
@@ -20,6 +21,9 @@
     ".row>div{flex:1;}"\
     "button{margin-top:24px;background:#1d78ff;color:#fff;border:none;border-radius:6px;padding:12px 20px;font-weight:600;cursor:pointer;font-size:14px;}"\
     "button:hover{background:#0f63d6;}"\
+    ".tab-btn{margin-top:0;padding:10px 20px;background:#f0f2f5;color:#555;border:1px solid #cbd3e3;}"\
+    ".tab-btn:hover{background:#e6e9ed;}"\
+    ".tab-btn.active{background:#1d78ff;color:#fff;border-color:#1d78ff;}"\
     ".note{font-size:12px;color:#888;margin-top:12px;}"\
     "</style>"
 
