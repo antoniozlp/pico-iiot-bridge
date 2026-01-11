@@ -158,6 +158,9 @@ add_subdirectory(src/config)
 # ========================= HTTP Server =========================
 add_subdirectory(src/http-server)
 
+# ========================= Serial-to-TCP Bridge =========================
+add_subdirectory(src/serial-to-tcp)
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(pico-iiot-bridge src/main.c )
@@ -184,7 +187,8 @@ target_link_libraries(pico-iiot-bridge
         pico_flash_storage
         system_config
         board_config
-        http_server)
+        http_server
+        serial_to_tcp)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE

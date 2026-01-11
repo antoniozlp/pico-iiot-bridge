@@ -5,72 +5,42 @@
 #include "task.h"
 #include "wizchip_conf.h"
 #include "wizchip_spi.h"
-#include "loopback.h"
 #include "cli_task.h"
 #include "pico_flash_storage.h"
 #include "system_config.h"
 #include "board_config.h"
 #include "http_utils.h"
 #include "web_page.h"
+#include "serial_to_tcp.h"
 
-#define LED_TOGGLE_RATE 500
-
-// Blink the LED on the Pico using FreeRTOS Demo Task
-void vBlinkLedDemoTask(void *pvParameters){
-    serial_config_t serial_config;
-    if (!config_get_serial_config(&serial_config))
-    {
-        printf("Error: Failed to get serial configuration!\n");
-        return;
-    }
-    board_init_uart(BOARD_UART1_ID, &serial_config);
-    uint32_t count = 0;
-    uint8_t buf[100] = {0};
-
-    while(1){
-        gpio_put(BOARD_LED_PIN, 1);
-        vTaskDelay(pdMS_TO_TICKS(LED_TOGGLE_RATE));
-        gpio_put(BOARD_LED_PIN, 0);
-        vTaskDelay(pdMS_TO_TICKS(LED_TOGGLE_RATE));
-
-        sprintf((char *)buf, "LED count: %d\r", count);
-        uart_puts(BOARD_UART1_ID, (const char *)buf);
-        count++;
-    }
-}
-
-// Global buffer for TCP server
-static uint8_t g_tcp_server_buf[2048];
-
-
-/* HTTP */
-
+/* HTTP Server Configuration */
 #define HTTP_SOCKET_MAX_NUM 2
-static uint8_t g_http_send_buf[2048] = {
-    0,
-};
-static uint8_t g_http_recv_buf[2048] = {
-    0,
-};
+static uint8_t g_http_send_buf[2048] = {0};
+static uint8_t g_http_recv_buf[2048] = {0};
 static uint8_t g_http_socket_num_list[HTTP_SOCKET_MAX_NUM] = {0, 1};
 
-
-
-void tcp_loopback_task(void *pvParameters) {
-    printf("TCP Loopback server started on port 5000\n");
-
-    // IMPORTANT: Tasks must never return!
-    while(1) {
-        int response = loopback_tcps(3, g_tcp_server_buf, 5000);
-        if (response < 0) {
-            printf("Error: %d\n", response);
-        }
-        vTaskDelay(pdMS_TO_TICKS(10)); // Small delay
-
-        /* Run HTTP server for testing purposes now */
-        for (uint8_t i = 0; i < HTTP_SOCKET_MAX_NUM; i++) {
+/**
+ * @brief HTTP Server Task
+ * 
+ * This task runs the HTTP web server for configuration management.
+ * It polls the HTTP sockets and handles incoming requests.
+ */
+static void vHttpServerTask(void *pvParameters)
+{
+    (void)pvParameters;
+    
+    printf("[HTTP] Server task started\n");
+    
+    while (1)
+    {
+        // Run HTTP server for all configured sockets
+        for (uint8_t i = 0; i < HTTP_SOCKET_MAX_NUM; i++)
+        {
             httpServer_run(i);
         }
+        
+        // Small delay to prevent tight loop
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -116,18 +86,21 @@ int main()
 
     sleep_ms(1000);
 
-    /* Initialize HTTP Server */
+    // Initialize HTTP Server
     httpServer_init(g_http_send_buf, g_http_recv_buf, HTTP_SOCKET_MAX_NUM, g_http_socket_num_list);
-    /* Register web page */
     reg_httpServer_webContent("index.html", index_page);
+    printf("[HTTP] Server initialized on port 80\n");
 
+    // Create FreeRTOS tasks
+    xTaskCreate(vHttpServerTask, "HTTP Server", 1024, NULL, 2, NULL);  // 4KB stack, priority 2
+    vCreateCLITask();           // CLI task on UART0
+    vCreateSerialToTcpTask();   // Serial-to-TCP bridge task
 
-    // Create tasks
-    xTaskCreate(vBlinkLedDemoTask, "Blink Task", 128, NULL, 1, NULL);
-    xTaskCreate(tcp_loopback_task, "TCP Loopback Task", 1024, NULL, 2, NULL);  // 4KB for network operations
-    vCreateCLITask();
-
+    printf("Starting FreeRTOS scheduler...\n");
     vTaskStartScheduler();
+
+    // Should never reach here
+    printf("ERROR: FreeRTOS scheduler failed to start!\n");
 
     return 0;
 }
