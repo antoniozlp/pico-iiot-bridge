@@ -38,6 +38,10 @@ pico_sdk_init()
 # Set the FreeRTOS Kernel path to the local FreeRTOS-Kernel folder
 set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib/FreeRTOS-Kernel)
 
+# Enable RTOS Views support for VS Code debugging by default
+# Comment out the following line to disable runtime statistics in production builds
+add_definitions(-DRTOS_VIEWS_SUPPORT)
+
 # Add FreeRTOS configuration (must be before FreeRTOS kernel import)
 add_subdirectory(lib/FreeRTOS-config)
 # Pull in FreeRTOS Kernel
@@ -161,6 +165,9 @@ add_subdirectory(src/http-server)
 # ========================= Serial-to-TCP Bridge =========================
 add_subdirectory(src/serial-to-tcp)
 
+# ========================= RTOS Views Support =========================
+add_subdirectory(src/rtos_views_support)
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(pico-iiot-bridge src/main.c )
@@ -188,7 +195,8 @@ target_link_libraries(pico-iiot-bridge
         system_config
         board_config
         http_server
-        serial_to_tcp)
+        serial_to_tcp
+        rtos_views_support)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE

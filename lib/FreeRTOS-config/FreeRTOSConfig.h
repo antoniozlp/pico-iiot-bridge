@@ -28,6 +28,8 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
+#include <stdint.h>
+
 /*-----------------------------------------------------------
  * Application specific definitions.
  *
@@ -81,9 +83,24 @@
 #define configUSE_DAEMON_TASK_STARTUP_HOOK      0
 
 /* Run time and task stats gathering related definitions. */
-#define configGENERATE_RUN_TIME_STATS           0
+/* Enable runtime stats when RTOS_VIEWS_SUPPORT is defined for VS Code RTOS Views */
+#ifdef RTOS_VIEWS_SUPPORT
+    /* RTOS Views enabled - collect runtime statistics for debugging */
+    #define configGENERATE_RUN_TIME_STATS           1
+    
+    /* Runtime stats timer configuration - uses RP2040/RP2350 hardware timer */
+    extern void vConfigureTimerForRunTimeStats(void);
+    extern uint32_t ulGetRunTimeCounterValue(void);
+    #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() vConfigureTimerForRunTimeStats()
+    #define portGET_RUN_TIME_COUNTER_VALUE() ulGetRunTimeCounterValue()
+#else
+    /* Production build - disable runtime stats for better performance */
+    #define configGENERATE_RUN_TIME_STATS           0
+#endif
+
 #define configUSE_TRACE_FACILITY                1
 #define configUSE_STATS_FORMATTING_FUNCTIONS    1
+#define configRECORD_STACK_HIGH_ADDRESS         1
 
 /* Co-routine related definitions. */
 #define configUSE_CO_ROUTINES                   0
