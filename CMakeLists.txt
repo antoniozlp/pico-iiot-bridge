@@ -162,6 +162,9 @@ add_subdirectory(src/config)
 # ========================= HTTP Server =========================
 add_subdirectory(src/http-server)
 
+# ========================= Logger =========================
+add_subdirectory(src/logger)
+
 # ========================= Serial-to-TCP Bridge =========================
 add_subdirectory(src/serial-to-tcp)
 
@@ -194,6 +197,7 @@ target_link_libraries(pico-iiot-bridge
         pico_flash_storage
         system_config
         board_config
+        logger
         http_server
         serial_to_tcp
         rtos_views_support)
