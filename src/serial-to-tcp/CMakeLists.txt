@@ -15,4 +15,5 @@ target_link_libraries(serial_to_tcp INTERFACE
     IOLIBRARY_FILES
     system_config
     board_config
+    logger
 )
