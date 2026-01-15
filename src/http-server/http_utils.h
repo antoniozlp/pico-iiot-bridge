@@ -14,6 +14,9 @@ extern "C" {
 #include "httpServer.h"
 #include "httpUtil.h"
 
+// Immediately undefine it
+#undef _HTTPSERVER_DEBUG_
+
 /* 
  * CGI Handler Functions implemented in http_server.c 
  * These override/implement the callbacks required by the WIZnet ioLibrary
