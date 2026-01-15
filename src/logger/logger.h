@@ -89,6 +89,29 @@ void logger_set_timestamp(bool enable);
 void logger_set_task_name(bool enable);
 
 /**
+ * @brief Lock stdio for exclusive access (blocks until available)
+ * 
+ * Use this to prevent logger output from interfering with interactive I/O.
+ * Always pair with logger_unlock_stdio().
+ * 
+ * Example:
+ *   logger_lock_stdio();
+ *   printf("User prompt: ");
+ *   // ... user interaction ...
+ *   logger_unlock_stdio();
+ * 
+ * @return true on success, false if logger not initialized
+ */
+bool logger_lock_stdio(void);
+
+/**
+ * @brief Unlock stdio to allow logger output
+ * 
+ * @return true on success, false if logger not initialized
+ */
+bool logger_unlock_stdio(void);
+
+/**
  * @brief Log a message (internal function, use macros instead)
  * 
  * @param level Log level

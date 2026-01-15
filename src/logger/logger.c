@@ -11,6 +11,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "semphr.h"
 
 #include "pico/stdlib.h"
 
@@ -51,6 +52,7 @@ typedef struct {
 
 // Logger state
 static QueueHandle_t s_log_queue = NULL;
+static SemaphoreHandle_t s_stdio_mutex = NULL;
 static logger_config_t s_config = {
     .filter_level = LOG_LEVEL_INFO,
     .include_timestamp = true,
@@ -99,36 +101,49 @@ static void vLoggerTask(void *pvParameters)
     (void)pvParameters;
     log_message_t msg;
     
-    printf("[LOGGER] Task started\n");
+    LOG_INFO("Logger task started");
     
     while (1)
     {
         // Wait for log messages
         if (xQueueReceive(s_log_queue, &msg, portMAX_DELAY) == pdTRUE)
         {
-            // Build the log line
-            const char *color = get_level_color(msg.level);
-            const char *reset = s_config.use_colors ? ANSI_COLOR_RESET : "";
-            
-            // Print timestamp if enabled
-            if (s_config.include_timestamp)
+            // Acquire stdio mutex before printing
+            // Use a timeout to prevent deadlock if mutex holder crashes
+            if (xSemaphoreTake(s_stdio_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
             {
-                uint32_t seconds = msg.timestamp_ms / 1000;
-                uint32_t ms = msg.timestamp_ms % 1000;
-                printf("[%5u.%03u] ", seconds, ms);
+                // Build the log line
+                const char *color = get_level_color(msg.level);
+                const char *reset = s_config.use_colors ? ANSI_COLOR_RESET : "";
+                
+                // Print timestamp if enabled
+                if (s_config.include_timestamp)
+                {
+                    uint32_t seconds = msg.timestamp_ms / 1000;
+                    uint32_t ms = msg.timestamp_ms % 1000;
+                    printf("[%5u.%03u] ", seconds, ms);
+                }
+                
+                // Print log level with color
+                printf("%s[%s]%s ", color, get_level_name(msg.level), reset);
+                
+                // Print task name if enabled
+                if (s_config.include_task_name && msg.task_name[0] != '\0')
+                {
+                    printf("[%-16s] ", msg.task_name);
+                }
+                
+                // Print the actual message
+                printf("%s\n", msg.message);
+                
+                // Release mutex
+                xSemaphoreGive(s_stdio_mutex);
             }
-            
-            // Print log level with color
-            printf("%s[%s]%s ", color, get_level_name(msg.level), reset);
-            
-            // Print task name if enabled
-            if (s_config.include_task_name && msg.task_name[0] != '\0')
+            else
             {
-                printf("[%-16s] ", msg.task_name);
+                // Mutex timeout - this shouldn't happen, but handle gracefully
+                // Just drop the message rather than deadlock
             }
-            
-            // Print the actual message
-            printf("%s\n", msg.message);
         }
     }
 }
@@ -150,11 +165,21 @@ bool logger_init(const logger_config_t *config)
         memcpy(&s_config, config, sizeof(logger_config_t));
     }
     
+    // Create stdio mutex for thread-safe console access
+    s_stdio_mutex = xSemaphoreCreateMutex();
+    if (s_stdio_mutex == NULL)
+    {
+        printf("[LOGGER] ERROR: Failed to create stdio mutex\n");
+        return false;
+    }
+    
     // Create the log message queue
     s_log_queue = xQueueCreate(LOGGER_QUEUE_LENGTH, sizeof(log_message_t));
     if (s_log_queue == NULL)
     {
         printf("[LOGGER] ERROR: Failed to create queue\n");
+        vSemaphoreDelete(s_stdio_mutex);
+        s_stdio_mutex = NULL;
         return false;
     }
     
@@ -172,7 +197,9 @@ bool logger_init(const logger_config_t *config)
     {
         printf("[LOGGER] ERROR: Failed to create task\n");
         vQueueDelete(s_log_queue);
+        vSemaphoreDelete(s_stdio_mutex);
         s_log_queue = NULL;
+        s_stdio_mutex = NULL;
         return false;
     }
     
@@ -307,6 +334,33 @@ void logger_log_va(log_level_t level, const char *format, va_list args)
         // Retry with blocking send - wait indefinitely for queue space
         xQueueSend(s_log_queue, &msg, portMAX_DELAY);
     }
+}
+
+/**
+ * @brief Lock stdio for exclusive access
+ */
+bool logger_lock_stdio(void)
+{
+    if (!s_logger_initialized || s_stdio_mutex == NULL)
+    {
+        return false;
+    }
+    
+    // Block until mutex is available
+    return (xSemaphoreTake(s_stdio_mutex, portMAX_DELAY) == pdTRUE);
+}
+
+/**
+ * @brief Unlock stdio
+ */
+bool logger_unlock_stdio(void)
+{
+    if (!s_logger_initialized || s_stdio_mutex == NULL)
+    {
+        return false;
+    }
+    
+    return (xSemaphoreGive(s_stdio_mutex) == pdTRUE);
 }
 
 /**

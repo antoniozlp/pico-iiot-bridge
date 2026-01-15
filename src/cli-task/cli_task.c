@@ -11,6 +11,7 @@
 #include "pico_flash_storage.h"
 #include "system_config.h"
 #include "wizchip_conf.h"
+#include "logger.h"
 
 // Definition of the task priority and stack size
 #define CLI_TASK_PRIORITY        ( tskIDLE_PRIORITY + 2 )
@@ -19,6 +20,11 @@
 // Command buffer size
 #define MAX_INPUT_LENGTH        50
 #define MAX_OUTPUT_LENGTH       configCOMMAND_INT_MAX_OUTPUT_SIZE
+
+// Adaptive polling configuration
+#define POLL_FAST_MS    1      // Fast polling during data reception
+#define POLL_SLOW_MS    100    // Slow polling when idle
+#define IDLE_THRESHOLD  500    // Number of idle loops before slowing down (100ms at 1ms = 100ms idle)
 
 // Global buffers
 static char cInputString[MAX_INPUT_LENGTH];
@@ -32,15 +38,10 @@ static void vCLITask(void *pvParameters)
     int cInputIndex = 0;
     BaseType_t xMoreDataToFollow;
     
-    // Adaptive polling configuration
-    #define POLL_FAST_MS    1      // Fast polling during data reception
-    #define POLL_SLOW_MS    100    // Slow polling when idle
-    #define IDLE_THRESHOLD  500    // Number of idle loops before slowing down (100ms at 1ms = 100ms idle)
-    
     int poll_delay_ms = POLL_SLOW_MS;  // Start with slow polling
     int idle_counter = 0;
 
-    printf("\n\nFreeRTOS CLI task started.\nType 'help' to view a list of registered commands.\n\n> ");
+    LOG_INFO("FreeRTOS CLI task started. Type 'help' to view a list of registered commands.");
 
     while (1)
     {
@@ -49,6 +50,10 @@ static void vCLITask(void *pvParameters)
 
         if (cRxedChar == '\r' || cRxedChar == '\n')
         {
+            // Lock stdio for exclusive access during command processing
+            // If lock fails, proceed anyway - CLI must remain functional
+            bool locked = logger_lock_stdio();
+            
             printf("\n");
 
             // Process command only if buffer is not empty
@@ -70,6 +75,11 @@ static void vCLITask(void *pvParameters)
             }
 
             printf("\n> ");
+            
+            // Unlock stdio - logger can now print again
+            if (locked) {
+                logger_unlock_stdio();
+            }
         }
         else if (cRxedChar == PICO_ERROR_TIMEOUT) 
         {
@@ -87,6 +97,10 @@ static void vCLITask(void *pvParameters)
         }
         else
         {
+            // Lock stdio for character echo
+            // If lock fails, proceed anyway - echo must remain responsive
+            bool locked = logger_lock_stdio();
+            
             if (cRxedChar == 8 || cRxedChar == 127) // Backspace
             {
                 if (cInputIndex > 0)
@@ -101,6 +115,11 @@ static void vCLITask(void *pvParameters)
                 putchar(cRxedChar);
                 cInputString[cInputIndex] = (char) cRxedChar;
                 cInputIndex++;
+            }
+            
+            // Unlock stdio
+            if (locked) {
+                logger_unlock_stdio();
             }
             
             // Data received - switch to fast polling for responsive input
