@@ -15,4 +15,5 @@ target_link_libraries(http_server PUBLIC
         pico_stdlib
         ETHERNET_FILES
         config
+        logger
         )

@@ -10,6 +10,7 @@
 #include "httpUtil.h"
 #include "http_utils.h"
 #include "system_config.h"
+#include "logger.h"
 
 static void copy_text(char *dst, size_t dst_len, const uint8_t *src)
 {
@@ -41,7 +42,7 @@ static uint8_t handle_set_network(uint8_t * uri)
     // Get current network configuration
     if (!config_get_net_info(&net_info))
     {
-        printf("[HTTP] ERROR: Failed to get network config\r\n");
+        LOG_ERROR("[HTTP] Failed to get network config");
         return HTTP_FAILED;
     }
 
@@ -89,14 +90,14 @@ static uint8_t handle_set_network(uint8_t * uri)
     {
         if (!config_set_net_info(&net_info))
         {
-            printf("[HTTP] ERROR: Failed to set network config\r\n");
+            LOG_ERROR("[HTTP] Failed to set network config");
             return HTTP_FAILED;
         }
         
-        printf("[HTTP] Network config updated\r\n");
+        LOG_INFO("[HTTP] Network config updated");
         if (!config_save_to_flash())
         {
-            printf("[HTTP] ERROR: Failed to save config to flash\r\n");
+            LOG_ERROR("[HTTP] Failed to save config to flash");
             return HTTP_FAILED;
         }
     }
@@ -123,7 +124,7 @@ static uint8_t handle_set_serial(uint8_t * uri)
 	// Get current serial configuration
 	if (!config_get_serial_config(uart_id, &serial_config))
 	{
-		printf("[HTTP] ERROR: Failed to get serial config\r\n");
+		LOG_ERROR("[HTTP] Failed to get serial config");
 		return HTTP_FAILED;
 	}
 
@@ -137,7 +138,7 @@ static uint8_t handle_set_serial(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid baud rate %lu\r\n", baud_val);
+			LOG_ERROR("[HTTP] Invalid baud rate %lu", baud_val);
 		}
 	}
 
@@ -151,7 +152,7 @@ static uint8_t handle_set_serial(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid databits %d\r\n", databits_val);
+			LOG_ERROR("[HTTP] Invalid databits %d", databits_val);
 		}
 	}
 
@@ -175,7 +176,7 @@ static uint8_t handle_set_serial(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid parity '%s'\r\n", (char *)param);
+			LOG_ERROR("[HTTP] Invalid parity '%s'", (char *)param);
 		}
 	}
 
@@ -189,7 +190,7 @@ static uint8_t handle_set_serial(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid stopbits %d\r\n", stopbits_val);
+			LOG_ERROR("[HTTP] Invalid stopbits %d", stopbits_val);
 		}
 	}
 
@@ -211,14 +212,14 @@ static uint8_t handle_set_serial(uint8_t * uri)
 	{
 		if (!config_set_serial_config(uart_id, &serial_config))
 		{
-			printf("[HTTP] ERROR: Failed to set serial config\r\n");
+			LOG_ERROR("[HTTP] Failed to set serial config");
 			return HTTP_FAILED;
 		}
 		
 		const char *parity_str = serial_config.parity == UART_PARITY_NONE ? "none" :
 								 serial_config.parity == UART_PARITY_EVEN ? "even" : "odd";
 		
-		printf("[HTTP] Serial%d config updated: baud=%lu, databits=%u, parity=%s, stopbits=%u, flowcts=%d, flowrts=%d\r\n",
+		LOG_INFO("[HTTP] Serial%d config updated: baud=%lu, databits=%u, parity=%s, stopbits=%u, flowcts=%d, flowrts=%d",
 			   uart_id,
 			   (unsigned long)serial_config.baud,
 			   (unsigned int)serial_config.databits,
@@ -229,7 +230,7 @@ static uint8_t handle_set_serial(uint8_t * uri)
         
 		if (!config_save_to_flash())
 		{
-			printf("[HTTP] ERROR: Failed to save config to flash\r\n");
+			LOG_ERROR("[HTTP] Failed to save config to flash");
 			return HTTP_FAILED;
 		}
 	}
@@ -246,7 +247,7 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 	// Get current Serial-to-TCP configuration
 	if (!config_get_serial_to_tcp_mode(&mode_config))
 	{
-		printf("[HTTP] ERROR: Failed to get Serial-to-TCP config\r\n");
+		LOG_ERROR("[HTTP] Failed to get Serial-to-TCP config");
 		return HTTP_FAILED;
 	}
 
@@ -287,7 +288,7 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid port %d (must be 1024-65535)\r\n", port_val);
+			LOG_ERROR("[HTTP] Invalid port %d (must be 1024-65535)", port_val);
 		}
 	}
 
@@ -301,7 +302,7 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid timeout %d (must be 1-3600)\r\n", timeout_val);
+			LOG_ERROR("[HTTP] Invalid timeout %d (must be 1-3600)", timeout_val);
 		}
 	}
 
@@ -315,7 +316,7 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid keepalive %d (must be 1-600)\r\n", keepalive_val);
+			LOG_ERROR("[HTTP] Invalid keepalive %d (must be 1-600)", keepalive_val);
 		}
 	}
 
@@ -329,7 +330,7 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 		}
 		else
 		{
-			printf("[HTTP] ERROR: Invalid max connections %d (must be 1-4)\r\n", maxconn_val);
+			LOG_ERROR("[HTTP] Invalid max connections %d (must be 1-4)", maxconn_val);
 		}
 	}
 
@@ -355,15 +356,15 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 	{
 		if (!config_set_serial_to_tcp_mode(&mode_config))
 		{
-			printf("[HTTP] ERROR: Failed to set Serial-to-TCP config\r\n");
+			LOG_ERROR("[HTTP] Failed to set Serial-to-TCP config");
 			return HTTP_FAILED;
 		}
 		
-		printf("[HTTP] Serial-to-TCP config updated\r\n");
+		LOG_INFO("[HTTP] Serial-to-TCP config updated");
 
 		if (!config_save_to_flash())
 		{
-			printf("[HTTP] ERROR: Failed to save config to flash\r\n");
+			LOG_ERROR("[HTTP] Failed to save config to flash");
 			return HTTP_FAILED;
 		}
 	}
@@ -434,7 +435,7 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 			!config_get_serial_config(1, &serial1_config) ||
 			!config_get_serial_to_tcp_mode(&s2tcp_config))
 		{
-			printf("[HTTP] ERROR: Failed to get configuration\r\n");
+			LOG_ERROR("[HTTP] Failed to get configuration");
 			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
 			return HTTP_FAILED;
 		}
