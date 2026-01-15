@@ -12,4 +12,5 @@ target_link_libraries(system_config INTERFACE
     pico_stdlib
     hardware_flash
     pico_flash_storage
+    logger
 )

@@ -6,6 +6,7 @@
 #include "system_config.h"
 #include "pico/stdio_uart.h"
 #include "pico_flash_storage.h"
+#include "logger.h"
 
 // Global configuration structure
 system_config_t g_sys_cfg;
@@ -82,17 +83,17 @@ bool config_load_from_flash(void)
         flash_config->version.patch == CONFIG_VERSION_PATCH)
     {
         memcpy(&g_sys_cfg, flash_config, sizeof(system_config_t));
-        printf("Configuration loaded from flash.\n");
+        LOG_INFO("Configuration loaded from flash");
         g_config_changed = false;  // In-memory matches flash
         g_config_loaded = true;
         return true;
     }
     else
     {
-        printf("No valid configuration found in flash.\n");
-        printf("Version: %d.%d.%d\n", flash_config->version.major, flash_config->version.minor, flash_config->version.patch);
-        printf("Expected: %d.%d.%d\n", CONFIG_VERSION_MAJOR, CONFIG_VERSION_MINOR, CONFIG_VERSION_PATCH);
-        printf("Loading defaults.\n");
+        LOG_WARN("No valid configuration found in flash");
+        LOG_WARN("Version: %d.%d.%d", flash_config->version.major, flash_config->version.minor, flash_config->version.patch);
+        LOG_WARN("Expected: %d.%d.%d", CONFIG_VERSION_MAJOR, CONFIG_VERSION_MINOR, CONFIG_VERSION_PATCH);
+        LOG_INFO("Loading defaults");
         config_set_default();
         g_config_changed = true;  // Defaults loaded, should be saved to flash
         g_config_loaded = true;
