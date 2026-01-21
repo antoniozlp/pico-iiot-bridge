@@ -34,8 +34,8 @@
                 "<div>"\
                     "<label for=\"dhcp\">DHCP Mode</label>"\
                     "<select id=\"dhcp\" name=\"dhcp\">"\
-                        "<option value=\"0\">Static</option>"\
-                        "<option value=\"1\">DHCP</option>"\
+                        "<option value=\"1\">Static</option>"\
+                        "<option value=\"2\">DHCP</option>"\
                     "</select>"\
                 "</div>"\
             "</div>"\
