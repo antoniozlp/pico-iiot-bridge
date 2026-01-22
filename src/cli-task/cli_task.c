@@ -264,6 +264,7 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
                            net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
             len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  DNS         : %d.%d.%d.%d\r\n", 
                            net_info.dns[0], net_info.dns[1], net_info.dns[2], net_info.dns[3]);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  DHCP        : %s\r\n", net_info.dhcp == NETINFO_DHCP ? "DHCP" : "Static");
             return pdFALSE;
         }
         else if (strncmp(pcParameter, "s2tcp", 5) == 0) {
@@ -664,12 +665,35 @@ static const CLI_Command_Definition_t xConfig = {
 
 };
 
+// Uptime command
+static BaseType_t prvUptimeCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
+{
+    (void) pcCommandString;
+    // Format uptime in HH:MM:SS format
+    uint32_t uptime_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    uint32_t uptime_s = uptime_ms / 1000;
+    uint32_t uptime_m = uptime_s / 60;
+    uint32_t uptime_h = uptime_m / 60;
+    uint32_t uptime_d = uptime_h / 24;
+    snprintf(pcWriteBuffer, xWriteBufferLen, "Uptime: %d days, %02d:%02d:%02d\r\n", uptime_d, uptime_h % 24, uptime_m % 60, uptime_s % 60);
+    return pdFALSE;
+}
+
+static const CLI_Command_Definition_t xUptime = {
+    "uptime",
+    "\r\nuptime - Show system uptime\r\n",
+    prvUptimeCommand,
+    -1  // Variable number of parameters
+};
+
+
 void vCreateCLITask(void)
 {
     // Register commands
     FreeRTOS_CLIRegisterCommand(&xTaskStats);
     FreeRTOS_CLIRegisterCommand(&xReboot);
     FreeRTOS_CLIRegisterCommand(&xConfig);
+    FreeRTOS_CLIRegisterCommand(&xUptime);
 
     // Create the task
     xTaskCreate(vCLITask, "CLI_Task", CLI_TASK_STACK_SIZE, NULL, CLI_TASK_PRIORITY, NULL);
