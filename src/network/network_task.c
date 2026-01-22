@@ -39,8 +39,8 @@ static bool s_dhcp_leased = false;
 static uint32_t s_dhcp_retry_count = 0;
 static SemaphoreHandle_t s_network_mutex = NULL;
 
-// DHCP buffer (allocated on heap to save stack space)
-static uint8_t *s_dhcp_buffer = NULL;
+// DHCP buffer (static allocation - safer and simpler than heap allocation)
+static uint8_t s_dhcp_buffer[DHCP_ETHERNET_BUF_SIZE] = {0};
 
 /**
  * @brief 1ms timer callback for DHCP time handler
@@ -122,12 +122,6 @@ static void network_dhcp_conflict(void)
  */
 static void network_dhcp_init(void)
 {
-    if (s_dhcp_buffer == NULL)
-    {
-        LOG_ERROR("[Network] DHCP buffer not allocated");
-        return;
-    }
-    
     LOG_INFO("[Network] Starting DHCP client...");
     
     DHCP_init(DHCP_SOCKET, s_dhcp_buffer);
@@ -283,21 +277,11 @@ static void vNetworkTask(void *pvParameters)
  */
 bool network_task_init(void)
 {
-    // Allocate DHCP buffer
-    s_dhcp_buffer = pvPortMalloc(DHCP_ETHERNET_BUF_SIZE);
-    if (s_dhcp_buffer == NULL)
-    {
-        LOG_ERROR("[Network] Failed to allocate DHCP buffer");
-        return false;
-    }
-    
     // Create mutex for thread-safe network status access
     s_network_mutex = xSemaphoreCreateMutex();
     if (s_network_mutex == NULL)
     {
         LOG_ERROR("[Network] Failed to create network mutex");
-        vPortFree(s_dhcp_buffer);
-        s_dhcp_buffer = NULL;
         return false;
     }
     
@@ -326,9 +310,7 @@ bool network_task_init(void)
     {
         LOG_ERROR("[Network] Failed to create network task");
         vSemaphoreDelete(s_network_mutex);
-        vPortFree(s_dhcp_buffer);
         s_network_mutex = NULL;
-        s_dhcp_buffer = NULL;
         return false;
     }
     
