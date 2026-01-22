@@ -168,6 +168,9 @@ add_subdirectory(src/logger)
 # ========================= Serial-to-TCP Bridge =========================
 add_subdirectory(src/serial-to-tcp)
 
+# ========================= Network Management =========================
+add_subdirectory(src/network)
+
 # ========================= RTOS Views Support =========================
 add_subdirectory(src/rtos_views_support)
 
@@ -200,6 +203,7 @@ target_link_libraries(pico-iiot-bridge
         logger
         http_server
         serial_to_tcp
+        network_task
         rtos_views_support)
 
 # Add the standard include files to the build

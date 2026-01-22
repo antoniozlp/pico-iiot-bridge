@@ -3,8 +3,6 @@
 #include "pico/stdlib.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "wizchip_conf.h"
-#include "wizchip_spi.h"
 #include "cli_task.h"
 #include "pico_flash_storage.h"
 #include "system_config.h"
@@ -13,6 +11,7 @@
 #include "web_page.h"
 #include "serial_to_tcp.h"
 #include "logger.h"
+#include "network_task.h"
 
 /* HTTP Server Configuration */
 #define HTTP_SOCKET_MAX_NUM 2
@@ -83,26 +82,15 @@ int main()
         LOG_WARN("Using default configuration");
     }
 
-    // Initialize WizNet chip
-    wizchip_spi_initialize();
-    wizchip_cris_initialize();
-    wizchip_reset();
-    wizchip_initialize();
-    wizchip_check();
-
-    // Configure network
-    wiz_NetInfo net_config;
-    if (!config_get_net_info(&net_config))
+    // Initialize network management task (handles Wiznet chip and DHCP)
+    if (!network_task_init())
     {
-        LOG_ERROR("Failed to get network configuration");
+        LOG_ERROR("Failed to initialize network task");
         return 1;
     }
-    network_initialize(net_config);
-    print_network_information(net_config);
-    LOG_INFO("Network configured: %d.%d.%d.%d", 
-             net_config.ip[0], net_config.ip[1], net_config.ip[2], net_config.ip[3]);
-
-    sleep_ms(1000);
+    
+    // Give network task time to initialize
+    sleep_ms(2000);
 
     // Initialize HTTP Server
     httpServer_init(g_http_send_buf, g_http_recv_buf, HTTP_SOCKET_MAX_NUM, g_http_socket_num_list);
