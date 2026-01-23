@@ -18,11 +18,14 @@
 
 #include "system_config.h"
 #include "logger.h"
+#include "network_task.h"
 
 // Task configuration
 #define NETWORK_TASK_STACK_SIZE    (configMINIMAL_STACK_SIZE * 8)  // 1KB stack
 #define NETWORK_TASK_PRIORITY     (tskIDLE_PRIORITY + 3)          // Higher priority for network
 #define NETWORK_TASK_DELAY_MS     250                             // Task loop delay
+#define NETWORK_TASK_WAIT_PHY_CONNECT_MS 10000                     // Wait 10 seconds for PHY link to connect
+#define NETWORK_TASK_WAIT_DHCP_RETRY_MS 10000                     // Wait 10 seconds for DHCP retry
 
 // DHCP configuration
 #define DHCP_SOCKET               2                               // Socket for DHCP client (avoid 0,1 used by HTTP)
@@ -41,6 +44,47 @@ static SemaphoreHandle_t s_network_mutex = NULL;
 
 // DHCP buffer (static allocation - safer and simpler than heap allocation)
 static uint8_t s_dhcp_buffer[DHCP_ETHERNET_BUF_SIZE] = {0};
+
+// Notification system
+#define MAX_NOTIFICATION_TASKS 4  // Maximum number of tasks that can register for notifications
+static TaskHandle_t s_notification_tasks[MAX_NOTIFICATION_TASKS] = {NULL};
+static SemaphoreHandle_t s_notification_mutex = NULL;
+
+/**
+ * @brief Send notification to all registered tasks
+ * 
+ * @param notification_bits Bit flags indicating what changed (NETWORK_NOTIFY_*)
+ */
+static void network_send_notification(uint32_t notification_bits)
+{
+    if (s_notification_mutex == NULL)
+        return;
+    
+    if (xSemaphoreTake(s_notification_mutex, pdMS_TO_TICKS(10)) != pdTRUE)
+        return;
+
+    LOG_DEBUG("Sending notification: %lu", notification_bits);
+    LOG_DEBUG("LINK_UP %d", notification_bits & NETWORK_NOTIFY_LINK_UP);
+    LOG_DEBUG("LINK_DOWN %d", notification_bits & NETWORK_NOTIFY_LINK_DOWN);
+    LOG_DEBUG("DHCP_STARTED %d", notification_bits & NETWORK_NOTIFY_DHCP_STARTED);
+    LOG_DEBUG("DHCP_LEASED %d", notification_bits & NETWORK_NOTIFY_DHCP_LEASED);
+    LOG_DEBUG("IP_CHANGED %d", notification_bits & NETWORK_NOTIFY_IP_CHANGED);
+    LOG_DEBUG("DHCP_FAILED %d", notification_bits & NETWORK_NOTIFY_DHCP_FAILED);
+    LOG_DEBUG("DHCP_STOPPED %d", notification_bits & NETWORK_NOTIFY_DHCP_STOPPED);
+    LOG_DEBUG("STATIC_CONFIG %d", notification_bits & NETWORK_NOTIFY_STATIC_CONFIG);
+    
+    // Send notification to all registered tasks
+    for (int i = 0; i < MAX_NOTIFICATION_TASKS; i++)
+    {
+        if (s_notification_tasks[i] != NULL)
+        {
+            // Use xTaskNotify() with eSetBits to OR the bits (preserves previous notifications)
+            xTaskNotify(s_notification_tasks[i], notification_bits, eSetBits);
+        }
+    }
+    
+    xSemaphoreGive(s_notification_mutex);
+}
 
 /**
  * @brief 1ms timer callback for DHCP time handler
@@ -70,19 +114,30 @@ static void network_timer_callback(void)
 static void network_dhcp_assign(void)
 {
     wiz_NetInfo net_info;
+    uint8_t old_ip[4] = {0, 0, 0, 0};
+    bool ip_changed = false;
     
     // First, get MAC and other config from configuration (preserves MAC address)
     if (!config_get_net_info(&net_info))
     {
-        LOG_ERROR("[Network] Failed to get network config for DHCP");
+        LOG_ERROR("Failed to get network config for DHCP");
         return;
     }
+    
+    // Save old IP to compare later
+    memcpy(old_ip, net_info.ip, 4);
     
     // Then, get IP/GW/SN/DNS from DHCP (overwrites static values)
     getIPfromDHCP(net_info.ip);
     getGWfromDHCP(net_info.gw);
     getSNfromDHCP(net_info.sn);
     getDNSfromDHCP(net_info.dns);
+    
+    // Check if IP actually changed
+    if (memcmp(old_ip, net_info.ip, 4) != 0)
+    {
+        ip_changed = true;
+    }
     
     // Set DHCP mode
     net_info.dhcp = NETINFO_DHCP;
@@ -98,12 +153,20 @@ static void network_dhcp_assign(void)
     print_network_information(net_info);
     
     uint32_t lease_time = getDHCPLeasetime();
-    LOG_INFO("[Network] DHCP IP leased: %d.%d.%d.%d (lease: %lu seconds)",
+    LOG_INFO("DHCP IP leased: %d.%d.%d.%d (lease: %lu seconds)",
              net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
              lease_time);
     
     s_dhcp_leased = true;
     s_dhcp_retry_count = 0;
+    
+    // Notify registered tasks
+    uint32_t notification_bits = NETWORK_NOTIFY_DHCP_LEASED;
+    if (ip_changed)
+    {
+        notification_bits |= NETWORK_NOTIFY_IP_CHANGED;
+    }
+    network_send_notification(notification_bits);
 }
 
 /**
@@ -113,7 +176,7 @@ static void network_dhcp_assign(void)
  */
 static void network_dhcp_conflict(void)
 {
-    LOG_ERROR("[Network] DHCP IP conflict detected!");
+    LOG_ERROR("DHCP IP conflict detected!");
     // In production, you might want to restart DHCP or use fallback IP
 }
 
@@ -122,7 +185,7 @@ static void network_dhcp_conflict(void)
  */
 static void network_dhcp_init(void)
 {
-    LOG_INFO("[Network] Starting DHCP client...");
+    LOG_INFO("Starting DHCP client...");
     
     DHCP_init(DHCP_SOCKET, s_dhcp_buffer);
     reg_dhcp_cbfunc(network_dhcp_assign, network_dhcp_assign, network_dhcp_conflict);
@@ -140,7 +203,7 @@ static void network_static_init(void)
     
     if (!config_get_net_info(&net_info))
     {
-        LOG_ERROR("[Network] Failed to get network configuration");
+        LOG_ERROR("Failed to get network configuration");
         return;
     }
     
@@ -153,8 +216,11 @@ static void network_static_init(void)
     // Print network information
     print_network_information(net_info);
     
-    LOG_INFO("[Network] Static IP configured: %d.%d.%d.%d",
+    LOG_INFO("Static IP configured: %d.%d.%d.%d",
              net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3]);
+    
+    // Notify registered tasks
+    network_send_notification(NETWORK_NOTIFY_STATIC_CONFIG);
 }
 
 /**
@@ -173,13 +239,13 @@ static void vNetworkTask(void *pvParameters)
     int dhcp_result;
     bool link_was_up = false;
     
-    LOG_INFO("[Network] Network task started");
+    LOG_INFO("Network task started");
     
     // Initialize network based on configuration
     wiz_NetInfo net_info;
     if (!config_get_net_info(&net_info))
     {
-        LOG_ERROR("[Network] Failed to get network configuration");
+        LOG_ERROR("Failed to get network configuration");
         vTaskDelete(NULL);
         return;
     }
@@ -204,30 +270,44 @@ static void vNetworkTask(void *pvParameters)
         {
             if (link_was_up)
             {
-                LOG_WARN("[Network] PHY link lost");
+                LOG_WARN("PHY link lost");
                 link_was_up = false;
                 
                 if (s_dhcp_enabled)
                 {
                     DHCP_stop();
                     s_dhcp_leased = false;
+
+                    // Notify registered tasks about PHY link down and DHCP stopped
+                    network_send_notification(NETWORK_NOTIFY_LINK_DOWN | NETWORK_NOTIFY_DHCP_STOPPED);
                 }
+                else {
+                    // Notify registered tasks about PHY link down and static config
+                    network_send_notification(NETWORK_NOTIFY_LINK_DOWN | NETWORK_NOTIFY_STATIC_CONFIG);
+                }
+                
             }
             
             // Wait for link to come back
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            vTaskDelay(pdMS_TO_TICKS(NETWORK_TASK_WAIT_PHY_CONNECT_MS));
             continue;
         }
         
         // Link is up
         if (!link_was_up)
         {
-            LOG_INFO("[Network] PHY link established");
+            LOG_INFO("PHY link established");
             link_was_up = true;
             
             if (s_dhcp_enabled)
             {
                 network_dhcp_init();
+                // Notify registered tasks about PHY link up and DHCP started
+                network_send_notification(NETWORK_NOTIFY_LINK_UP | NETWORK_NOTIFY_DHCP_STARTED);
+            }
+            else {
+                // Notify registered tasks about PHY link up and static config
+                network_send_notification(NETWORK_NOTIFY_LINK_UP | NETWORK_NOTIFY_STATIC_CONFIG);
             }
         }
         
@@ -251,16 +331,19 @@ static void vNetworkTask(void *pvParameters)
                 
                 if (s_dhcp_retry_count <= DHCP_RETRY_COUNT)
                 {
-                    LOG_WARN("[Network] DHCP timeout, retry %lu/%d",
+                    LOG_WARN("DHCP timeout, retry %lu/%d",
                              s_dhcp_retry_count, DHCP_RETRY_COUNT);
                 }
                 else
                 {
-                    LOG_ERROR("[Network] DHCP failed after %d retries", DHCP_RETRY_COUNT);
+                    LOG_ERROR("DHCP failed after %d retries", DHCP_RETRY_COUNT);
                     DHCP_stop();
                     
+                    // Notify registered tasks
+                    network_send_notification(NETWORK_NOTIFY_DHCP_FAILED | NETWORK_NOTIFY_DHCP_STOPPED);
+                    
                     // Keep trying periodically
-                    vTaskDelay(pdMS_TO_TICKS(10000));  // Wait 10 seconds before retry
+                    vTaskDelay(pdMS_TO_TICKS(NETWORK_TASK_WAIT_DHCP_RETRY_MS));  // Wait 10 seconds before retry
                     s_dhcp_retry_count = 0;
                     network_dhcp_init();
                 }
@@ -281,12 +364,22 @@ bool network_task_init(void)
     s_network_mutex = xSemaphoreCreateMutex();
     if (s_network_mutex == NULL)
     {
-        LOG_ERROR("[Network] Failed to create network mutex");
+        LOG_ERROR("Failed to create network mutex");
+        return false;
+    }
+    
+    // Create mutex for notification system
+    s_notification_mutex = xSemaphoreCreateMutex();
+    if (s_notification_mutex == NULL)
+    {
+        LOG_ERROR("Failed to create notification mutex");
+        vSemaphoreDelete(s_network_mutex);
+        s_network_mutex = NULL;
         return false;
     }
     
     // Initialize Wiznet chip
-    LOG_INFO("[Network] Initializing Wiznet chip...");
+    LOG_INFO("Initializing Wiznet chip...");
     wizchip_spi_initialize();
     wizchip_cris_initialize();
     wizchip_reset();
@@ -308,16 +401,112 @@ bool network_task_init(void)
     
     if (result != pdPASS)
     {
-        LOG_ERROR("[Network] Failed to create network task");
+        LOG_ERROR("Failed to create network task");
+        vSemaphoreDelete(s_notification_mutex);
         vSemaphoreDelete(s_network_mutex);
+        s_notification_mutex = NULL;
         s_network_mutex = NULL;
         return false;
     }
     
     s_network_initialized = true;
-    LOG_INFO("[Network] Network task created successfully");
+    LOG_INFO("Network task created successfully");
     
     return true;
+}
+
+/**
+ * @brief Register a task to receive network status change notifications
+ */
+bool network_task_register_notification(TaskHandle_t task_handle)
+{
+    if (!s_network_initialized || s_notification_mutex == NULL)
+    {
+        return false;
+    }
+    
+    // Use current task if NULL provided
+    if (task_handle == NULL)
+    {
+        task_handle = xTaskGetCurrentTaskHandle();
+        if (task_handle == NULL)
+        {
+            return false;  // Can't register from non-task context
+        }
+    }
+    
+    if (xSemaphoreTake(s_notification_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+    {
+        return false;
+    }
+    
+    // Check if already registered
+    for (int i = 0; i < MAX_NOTIFICATION_TASKS; i++)
+    {
+        if (s_notification_tasks[i] == task_handle)
+        {
+            xSemaphoreGive(s_notification_mutex);
+            return true;  // Already registered
+        }
+    }
+    
+    // Find empty slot
+    for (int i = 0; i < MAX_NOTIFICATION_TASKS; i++)
+    {
+        if (s_notification_tasks[i] == NULL)
+        {
+            s_notification_tasks[i] = task_handle;
+            xSemaphoreGive(s_notification_mutex);
+            LOG_INFO("Task '%s' registered for notifications", pcTaskGetName(task_handle));
+            return true;
+        }
+    }
+    
+    xSemaphoreGive(s_notification_mutex);
+    LOG_ERROR("Maximum notification tasks reached");
+    return false;  // No free slots
+}
+
+/**
+ * @brief Unregister a task from receiving network status notifications
+ */
+bool network_task_unregister_notification(TaskHandle_t task_handle)
+{
+    if (!s_network_initialized || s_notification_mutex == NULL)
+    {
+        return false;
+    }
+    
+    // Use current task if NULL provided
+    if (task_handle == NULL)
+    {
+        task_handle = xTaskGetCurrentTaskHandle();
+        if (task_handle == NULL)
+        {
+            return false;
+        }
+    }
+    
+    if (xSemaphoreTake(s_notification_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+    {
+        return false;
+    }
+    
+    // Find and remove
+    for (int i = 0; i < MAX_NOTIFICATION_TASKS; i++)
+    {
+        if (s_notification_tasks[i] == task_handle)
+        {
+            s_notification_tasks[i] = NULL;
+            xSemaphoreGive(s_notification_mutex);
+            LOG_INFO("Task '%s' unregistered from notifications", pcTaskGetName(task_handle));
+            return true;
+        }
+    }
+    
+    xSemaphoreGive(s_notification_mutex);
+    LOG_WARN("Task '%s' not found in notification tasks", pcTaskGetName(task_handle));
+    return false;  // Not found
 }
 
 /**
