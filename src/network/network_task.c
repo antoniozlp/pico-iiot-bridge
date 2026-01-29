@@ -66,12 +66,9 @@ static void network_send_notification(uint32_t notification_bits)
     LOG_DEBUG("Sending notification: %lu", notification_bits);
     LOG_DEBUG("LINK_UP %d", notification_bits & NETWORK_NOTIFY_LINK_UP);
     LOG_DEBUG("LINK_DOWN %d", notification_bits & NETWORK_NOTIFY_LINK_DOWN);
-    LOG_DEBUG("DHCP_STARTED %d", notification_bits & NETWORK_NOTIFY_DHCP_STARTED);
-    LOG_DEBUG("DHCP_LEASED %d", notification_bits & NETWORK_NOTIFY_DHCP_LEASED);
+    LOG_DEBUG("READY %d", notification_bits & NETWORK_NOTIFY_READY);
+    LOG_DEBUG("NOT_READY %d", notification_bits & NETWORK_NOTIFY_NOT_READY);
     LOG_DEBUG("IP_CHANGED %d", notification_bits & NETWORK_NOTIFY_IP_CHANGED);
-    LOG_DEBUG("DHCP_FAILED %d", notification_bits & NETWORK_NOTIFY_DHCP_FAILED);
-    LOG_DEBUG("DHCP_STOPPED %d", notification_bits & NETWORK_NOTIFY_DHCP_STOPPED);
-    LOG_DEBUG("STATIC_CONFIG %d", notification_bits & NETWORK_NOTIFY_STATIC_CONFIG);
     
     // Send notification to all registered tasks
     for (int i = 0; i < MAX_NOTIFICATION_TASKS; i++)
@@ -160,8 +157,8 @@ static void network_dhcp_assign(void)
     s_dhcp_leased = true;
     s_dhcp_retry_count = 0;
     
-    // Notify registered tasks
-    uint32_t notification_bits = NETWORK_NOTIFY_DHCP_LEASED;
+    // Notify registered tasks - network is now ready
+    uint32_t notification_bits = NETWORK_NOTIFY_READY;
     if (ip_changed)
     {
         notification_bits |= NETWORK_NOTIFY_IP_CHANGED;
@@ -219,8 +216,8 @@ static void network_static_init(void)
     LOG_INFO("Static IP configured: %d.%d.%d.%d",
              net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3]);
     
-    // Notify registered tasks
-    network_send_notification(NETWORK_NOTIFY_STATIC_CONFIG);
+    // Notify registered tasks - network is now ready
+    network_send_notification(NETWORK_NOTIFY_READY);
 }
 
 /**
@@ -277,15 +274,10 @@ static void vNetworkTask(void *pvParameters)
                 {
                     DHCP_stop();
                     s_dhcp_leased = false;
-
-                    // Notify registered tasks about PHY link down and DHCP stopped
-                    network_send_notification(NETWORK_NOTIFY_LINK_DOWN | NETWORK_NOTIFY_DHCP_STOPPED);
-                }
-                else {
-                    // Notify registered tasks about PHY link down and static config
-                    network_send_notification(NETWORK_NOTIFY_LINK_DOWN | NETWORK_NOTIFY_STATIC_CONFIG);
                 }
                 
+                // Notify registered tasks - network is down and not ready
+                network_send_notification(NETWORK_NOTIFY_LINK_DOWN | NETWORK_NOTIFY_NOT_READY);
             }
             
             // Wait for link to come back
@@ -299,15 +291,18 @@ static void vNetworkTask(void *pvParameters)
             LOG_INFO("PHY link established");
             link_was_up = true;
             
+            // Notify link is up
+            network_send_notification(NETWORK_NOTIFY_LINK_UP);
+            
             if (s_dhcp_enabled)
             {
+                // Start DHCP - will send NETWORK_NOTIFY_READY when lease obtained
                 network_dhcp_init();
-                // Notify registered tasks about PHY link up and DHCP started
-                network_send_notification(NETWORK_NOTIFY_LINK_UP | NETWORK_NOTIFY_DHCP_STARTED);
             }
-            else {
-                // Notify registered tasks about PHY link up and static config
-                network_send_notification(NETWORK_NOTIFY_LINK_UP | NETWORK_NOTIFY_STATIC_CONFIG);
+            else
+            {
+                // Static IP - configure and send READY notification
+                network_static_init();
             }
         }
         
@@ -339,11 +334,11 @@ static void vNetworkTask(void *pvParameters)
                     LOG_ERROR("DHCP failed after %d retries", DHCP_RETRY_COUNT);
                     DHCP_stop();
                     
-                    // Notify registered tasks
-                    network_send_notification(NETWORK_NOTIFY_DHCP_FAILED | NETWORK_NOTIFY_DHCP_STOPPED);
+                    // Notify registered tasks - network not ready
+                    network_send_notification(NETWORK_NOTIFY_NOT_READY);
                     
                     // Keep trying periodically
-                    vTaskDelay(pdMS_TO_TICKS(NETWORK_TASK_WAIT_DHCP_RETRY_MS));  // Wait 10 seconds before retry
+                    vTaskDelay(pdMS_TO_TICKS(NETWORK_TASK_WAIT_DHCP_RETRY_MS));
                     s_dhcp_retry_count = 0;
                     network_dhcp_init();
                 }

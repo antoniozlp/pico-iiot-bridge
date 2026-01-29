@@ -22,16 +22,15 @@
  * @brief Network status change notification bits
  * 
  * These bits are used in FreeRTOS task notifications to signal
- * network status changes to registered tasks.
+ * network status changes to registered tasks. The events abstract
+ * away DHCP vs static IP complexity, so listener tasks don't need
+ * to care about the connection type.
  */
 #define NETWORK_NOTIFY_LINK_UP        (1UL << 0)  ///< PHY link established
 #define NETWORK_NOTIFY_LINK_DOWN      (1UL << 1)  ///< PHY link lost
-#define NETWORK_NOTIFY_STATIC_CONFIG  (1UL << 2)  ///< Static IP configured
-#define NETWORK_NOTIFY_DHCP_STARTED   (1UL << 3)  ///< DHCP client started
-#define NETWORK_NOTIFY_DHCP_LEASED    (1UL << 4)  ///< DHCP IP successfully leased
-#define NETWORK_NOTIFY_IP_CHANGED     (1UL << 5)  ///< IP address changed (DHCP)
-#define NETWORK_NOTIFY_DHCP_FAILED    (1UL << 6)  ///< DHCP lease failed
-#define NETWORK_NOTIFY_DHCP_STOPPED   (1UL << 7)  ///< DHCP client stopped
+#define NETWORK_NOTIFY_READY          (1UL << 2)  ///< Network ready (link up + IP configured)
+#define NETWORK_NOTIFY_NOT_READY      (1UL << 3)  ///< Network not ready (link down or config failed)
+#define NETWORK_NOTIFY_IP_CHANGED     (1UL << 4)  ///< IP address changed
 
 /**
  * @brief Initialize and start the network management task
@@ -58,7 +57,8 @@ bool network_task_get_status(uint8_t ip_address[4], bool *link_status);
  * @brief Register a task to receive network status change notifications
  * 
  * Registered tasks will receive FreeRTOS task notifications when network
- * status changes (link up/down, IP changes, DHCP events, etc.).
+ * status changes. The notification system abstracts away DHCP vs static IP
+ * complexity - tasks simply wait for NETWORK_NOTIFY_READY.
  * 
  * @param task_handle Handle of the task to notify (NULL = current task)
  * @return true if registration successful, false otherwise
@@ -75,10 +75,12 @@ bool network_task_get_status(uint8_t ip_address[4], bool *link_status);
  * uint32_t notification_value;
  * if (xTaskNotifyWait(0, ULONG_MAX, &notification_value, pdMS_TO_TICKS(1000)) == pdTRUE)
  * {
- *     if (notification_value & NETWORK_NOTIFY_LINK_UP)
- *         // Handle link up
+ *     if (notification_value & NETWORK_NOTIFY_READY)
+ *         // Network is ready (link up + IP configured)
+ *     if (notification_value & NETWORK_NOTIFY_NOT_READY)
+ *         // Network is not ready (close connections, etc.)
  *     if (notification_value & NETWORK_NOTIFY_IP_CHANGED)
- *         // Handle IP change
+ *         // IP address changed (may need to reconnect)
  * }
  * @endcode
  */
