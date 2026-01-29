@@ -7,42 +7,10 @@
 #include "pico_flash_storage.h"
 #include "system_config.h"
 #include "board_config.h"
-#include "http_utils.h"
-#include "web_page.h"
 #include "serial_to_tcp.h"
 #include "logger.h"
 #include "network_task.h"
-
-/* HTTP Server Configuration */
-#define HTTP_SOCKET_MAX_NUM 2
-static uint8_t g_http_send_buf[2048] = {0};
-static uint8_t g_http_recv_buf[2048] = {0};
-static uint8_t g_http_socket_num_list[HTTP_SOCKET_MAX_NUM] = {0, 1};
-
-/**
- * @brief HTTP Server Task
- * 
- * This task runs the HTTP web server for configuration management.
- * It polls the HTTP sockets and handles incoming requests.
- */
-static void vHttpServerTask(void *pvParameters)
-{
-    (void)pvParameters;
-    
-    LOG_INFO("HTTP Server task started");
-    
-    while (1)
-    {
-        // Run HTTP server for all configured sockets
-        for (uint8_t i = 0; i < HTTP_SOCKET_MAX_NUM; i++)
-        {
-            httpServer_run(i);
-        }
-        
-        // Small delay to prevent tight loop
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
+#include "http_server_task.h"
 
 int main()
 {
@@ -57,7 +25,7 @@ int main()
     
     // Initialize logger system (must be early, before other tasks)
     logger_config_t logger_cfg = {
-        .filter_level = LOG_LEVEL_INFO,  // Change to LOG_LEVEL_DEBUG for verbose output
+        .filter_level = LOG_LEVEL_DEBUG,  // Change to LOG_LEVEL_DEBUG for verbose output
         .include_timestamp = true,
         .include_task_name = true,
         .use_colors = true
@@ -93,12 +61,19 @@ int main()
     sleep_ms(2000);
 
     // Initialize HTTP Server
-    httpServer_init(g_http_send_buf, g_http_recv_buf, HTTP_SOCKET_MAX_NUM, g_http_socket_num_list);
-    reg_httpServer_webContent("index.html", index_page);
-    LOG_INFO("HTTP Server initialized on port 80");
+    if (!http_server_task_init())
+    {
+        LOG_ERROR("Failed to initialize HTTP server");
+        return 1;
+    }
 
     // Create FreeRTOS tasks
-    xTaskCreate(vHttpServerTask, "HTTP Server", 1024, NULL, 2, NULL);  // 4KB stack, priority 2
+    if (!http_server_task_create())
+    {
+        LOG_ERROR("Failed to create HTTP server task");
+        return 1;
+    }
+    
     vCreateCLITask();           // CLI task on UART0
     vCreateSerialToTcpTask();   // Serial-to-TCP bridge task
 

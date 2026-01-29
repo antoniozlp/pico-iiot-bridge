@@ -2,6 +2,7 @@ add_library(http_server STATIC)
 
 target_sources(http_server PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/http_utils.c
+        ${CMAKE_CURRENT_LIST_DIR}/http_server_task.c
         ${CMAKE_SOURCE_DIR}/lib/WIZnet/ioLibrary_Driver/Internet/httpServer/httpServer.c
         ${CMAKE_SOURCE_DIR}/lib/WIZnet/ioLibrary_Driver/Internet/httpServer/httpParser.c
         )
@@ -13,9 +14,11 @@ target_include_directories(http_server PUBLIC
 
 target_link_libraries(http_server PUBLIC
         pico_stdlib
+        FreeRTOS-Kernel
         ETHERNET_FILES
         config
         logger
+        network_task
         )
 
 # Disable HTTP server debug messages from WIZnet library
