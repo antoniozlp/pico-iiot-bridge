@@ -1,11 +1,15 @@
 /**
  * @file serial_to_tcp.c
  * @brief Serial-to-TCP Bridge Implementation
+ * 
+ * This module provides a transparent bidirectional bridge between UART and TCP.
+ * Configuration is read once at task startup - changes require a system reboot.
  */
 
 #include "serial_to_tcp.h"
 #include <string.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -19,6 +23,7 @@
 #include "system_config.h"
 #include "board_config.h"
 #include "logger.h"
+#include "network_task.h"
 
 // Task configuration
 #define S2TCP_TASK_PRIORITY     (tskIDLE_PRIORITY + 2)
@@ -29,11 +34,12 @@
 #define TCP_BUFFER_SIZE         2048
 
 // Socket number to use (should not conflict with HTTP server sockets 0,1)
-#define S2TCP_SOCKET_NUM        2
+#define S2TCP_SOCKET_NUM        3
 
 // Retry delays
 #define TCP_RETRY_DELAY_MS      5000    // 5 seconds between reconnection attempts
 #define TASK_POLL_DELAY_MS      10      // Task polling interval
+#define NETWORK_READY_TIME_OUT_MS 30000 // 30 seconds
 
 // Task state
 typedef enum {
@@ -176,7 +182,7 @@ static int32_t s2tcp_handle_server(s2tcp_context_t *ctx)
             break;
             
         case SOCK_CLOSED:
-            LOG_DEBUG("Opening TCP server socket on port %d", ctx->config.local_port);
+            LOG_INFO("Opening TCP server socket on port %d", ctx->config.local_port);
             if ((ret = socket(sn, Sn_MR_TCP, ctx->config.local_port, 0x00)) != sn)
                 return ret;
             break;
@@ -296,89 +302,202 @@ static int32_t s2tcp_handle_client(s2tcp_context_t *ctx)
 }
 
 /**
- * @brief Serial-to-TCP bridge task
+ * @brief Wait for network to be ready (link up and IP assigned)
+ * 
+ * Simplified version that works for both DHCP and static IP modes.
+ * Simply waits for the NETWORK_NOTIFY_READY event.
+ * 
+ * @return true if network is ready, false on timeout
  */
+static bool wait_for_network_ready(uint32_t timeout_ms)
+{
+    uint32_t start_time = xTaskGetTickCount();
+    
+    LOG_INFO("Waiting for network to be ready...");
+    
+    while ((xTaskGetTickCount() - start_time) < pdMS_TO_TICKS(timeout_ms))
+    {
+        uint32_t notification_value = 0;
+        
+        // Wait for notification with timeout
+        if (xTaskNotifyWait(0, ULONG_MAX, &notification_value, pdMS_TO_TICKS(100)) == pdTRUE)
+        {
+            if (notification_value & NETWORK_NOTIFY_READY)
+            {
+                // Network is ready (link up + IP configured)
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
 static void vSerialToTcpTask(void *pvParameters)
 {
     s2tcp_context_t ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.socket_num = S2TCP_SOCKET_NUM;
-    ctx.state = S2TCP_STATE_DISABLED;
+    ctx.state = S2TCP_STATE_INITIALIZING;
     
     // Small delay to ensure other tasks are initialized
     vTaskDelay(pdMS_TO_TICKS(100));
     
     LOG_INFO("Serial-to-TCP task started");
     
+    // Load configuration once at startup
+    // NOTE: Configuration changes require a system reboot to take effect
+    if (!config_get_serial_to_tcp_mode(&ctx.config))
+    {
+        LOG_ERROR("Failed to get configuration - task will exit");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Check if mode is enabled
+    if (!ctx.config.enable)
+    {
+        LOG_INFO("Mode disabled in configuration - task will exit");
+        LOG_INFO("To enable, change configuration and reboot the system");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    LOG_INFO("Mode enabled: %s on UART%d",
+             ctx.config.mode == TCP_MODE_SERVER ? "Server" : "Client",
+             ctx.config.serial_id);
+    
+    // Initialize UART
+    if (!s2tcp_init_uart(&ctx))
+    {
+        LOG_ERROR("Failed to initialize UART - task will exit");
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Register for network status change notifications
+    network_task_register_notification(NULL);
+    
+    // State variables for the main loop
+    bool network_ready = false;
+    bool was_connected = false;
+    
+    // Main task loop - implements state machine from workflow diagram
     while (1)
     {
-        // Get current configuration
-        if (!config_get_serial_to_tcp_mode(&ctx.config))
+        // Step 1: Wait for network to be ready (with timeout)
+        if (!wait_for_network_ready(NETWORK_READY_TIME_OUT_MS))  // 30 second timeout
         {
-            LOG_ERROR("Failed to get configuration");
-            ctx.state = S2TCP_STATE_ERROR;
-            vTaskDelay(pdMS_TO_TICKS(TCP_RETRY_DELAY_MS));
-            continue;
-        }
-        
-        // Check if mode is enabled
-        if (!ctx.config.enable)
-        {
-            if (ctx.state != S2TCP_STATE_DISABLED)
+            // Network not ready after timeout
+            if (was_connected)
             {
-                LOG_INFO("Mode disabled, closing socket");
+                // We had a connection before - close it now
+                LOG_WARN("Network timeout - closing connections");
                 close(ctx.socket_num);
-                ctx.state = S2TCP_STATE_DISABLED;
+                ctx.state = S2TCP_STATE_INITIALIZING;
+                was_connected = false;
             }
-            vTaskDelay(pdMS_TO_TICKS(1000));  // Check every second
+            else
+            {
+                // Never had a connection - just log and retry
+                LOG_INFO("Waiting for network connection...");
+            }
+            // Loop back to wait again
             continue;
         }
         
-        // Initialize UART if needed
-        if (ctx.state == S2TCP_STATE_DISABLED || ctx.state == S2TCP_STATE_ERROR)
-        {
-            LOG_INFO("Mode enabled: %s on UART%d",
-                     ctx.config.mode == TCP_MODE_SERVER ? "Server" : "Client",
-                     ctx.config.serial_id);
-            
-            if (!s2tcp_init_uart(&ctx))
-            {
-                ctx.state = S2TCP_STATE_ERROR;
-                vTaskDelay(pdMS_TO_TICKS(TCP_RETRY_DELAY_MS));
-                continue;
-            }
-            
-            ctx.state = S2TCP_STATE_INITIALIZING;
-        }
+        // Network is ready!
+        network_ready = true;
+        LOG_INFO("Network ready - entering operation mode");
         
-        // Handle TCP connection based on mode
-        int32_t result;
-        if (ctx.config.mode == TCP_MODE_SERVER)
+        // Step 2-4: Handle TCP operations and network events
+        while (network_ready)
         {
-            result = s2tcp_handle_server(&ctx);
-        }
-        else
-        {
-            result = s2tcp_handle_client(&ctx);
-        }
-        
-        if (result < 0)
-        {
-            LOG_WARN("Socket error: %d", result);
+            uint32_t notification_value = 0;
             
-            // For client mode, implement retry logic
-            if (ctx.config.mode == TCP_MODE_CLIENT && ctx.state == S2TCP_STATE_TCP_CONNECTING)
+            // Check for network status changes (non-blocking)
+            if (xTaskNotifyWait(0, ULONG_MAX, &notification_value, 0) == pdTRUE)
             {
-                if (ctx.connect_attempts > 0 && (ctx.connect_attempts % 10) == 0)
+                if (notification_value & NETWORK_NOTIFY_NOT_READY)
                 {
-                    LOG_WARN("Connection failed after %u attempts, retrying...", ctx.connect_attempts);
+                    // Network lost - give it a grace period
+                    LOG_WARN("Network not ready - waiting for recovery");
+                    network_ready = false;
+                    // Break to outer loop to wait_for_network_ready()
+                    break;
                 }
-                vTaskDelay(pdMS_TO_TICKS(TCP_RETRY_DELAY_MS));
+                
+                if (notification_value & NETWORK_NOTIFY_IP_CHANGED)
+                {
+                    // IP changed - must close and reinitialize immediately
+                    LOG_INFO("Network IP changed - reinitializing");
+                    
+                    if (was_connected)
+                    {
+                        close(ctx.socket_num);
+                        ctx.state = S2TCP_STATE_INITIALIZING;
+                        was_connected = false;
+                    }
+                    
+                    network_ready = false;
+                    // Break to outer loop to wait_for_network_ready()
+                    break;
+                }
+                
+                if (notification_value & NETWORK_NOTIFY_READY)
+                {
+                    // Network ready confirmation (redundant but safe)
+                    network_ready = true;
+                }
             }
+            
+            // Handle TCP connection based on mode
+            int32_t result;
+            if (ctx.config.mode == TCP_MODE_SERVER)
+            {
+                result = s2tcp_handle_server(&ctx);
+            }
+            else
+            {
+                result = s2tcp_handle_client(&ctx);
+            }
+            
+            // Track connection state
+            if (ctx.state == S2TCP_STATE_CONNECTED && !was_connected)
+            {
+                was_connected = true;
+                LOG_DEBUG("Connection established");
+            }
+            else if (ctx.state != S2TCP_STATE_CONNECTED && was_connected)
+            {
+                was_connected = false;
+                LOG_DEBUG("Connection closed");
+            }
+            
+            // Handle errors
+            if (result < 0)
+            {
+                LOG_WARN("Socket error: %d", result);
+                
+                // For client mode, implement retry logic with backoff
+                if (ctx.config.mode == TCP_MODE_CLIENT && ctx.state == S2TCP_STATE_TCP_CONNECTING)
+                {
+                    ctx.connect_attempts++;
+                    if ((ctx.connect_attempts % 10) == 0)
+                    {
+                        LOG_WARN("Connection failed after %u attempts, retrying...", 
+                                 ctx.connect_attempts);
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(TCP_RETRY_DELAY_MS));
+                }
+            }
+            
+            // Small delay to prevent tight loop
+            vTaskDelay(pdMS_TO_TICKS(TASK_POLL_DELAY_MS));
         }
         
-        // Small delay to prevent tight loop
-        vTaskDelay(pdMS_TO_TICKS(TASK_POLL_DELAY_MS));
+        // If we exit the inner loop, network_ready is false
+        // Loop back to wait_for_network_ready()
     }
 }
 
