@@ -340,9 +340,6 @@ static void vSerialToTcpTask(void *pvParameters)
     ctx.socket_num = S2TCP_SOCKET_NUM;
     ctx.state = S2TCP_STATE_INITIALIZING;
     
-    // Small delay to ensure other tasks are initialized
-    vTaskDelay(pdMS_TO_TICKS(100));
-    
     LOG_INFO("Serial-to-TCP task started");
     
     // Load configuration once at startup

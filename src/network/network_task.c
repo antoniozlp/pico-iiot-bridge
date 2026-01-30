@@ -24,7 +24,7 @@
 #define NETWORK_TASK_STACK_SIZE    (configMINIMAL_STACK_SIZE * 8)  // 1KB stack
 #define NETWORK_TASK_PRIORITY     (tskIDLE_PRIORITY + 3)          // Higher priority for network
 #define NETWORK_TASK_DELAY_MS     250                             // Task loop delay
-#define NETWORK_TASK_WAIT_PHY_CONNECT_MS 10000                     // Wait 10 seconds for PHY link to connect
+#define NETWORK_TASK_WAIT_PHY_CONNECT_MS 1000                     // Wait 1 second for PHY link to connect
 #define NETWORK_TASK_WAIT_DHCP_RETRY_MS 10000                     // Wait 10 seconds for DHCP retry
 
 // DHCP configuration
@@ -62,13 +62,15 @@ static void network_send_notification(uint32_t notification_bits)
     
     if (xSemaphoreTake(s_notification_mutex, pdMS_TO_TICKS(10)) != pdTRUE)
         return;
+    
+    
 
-    LOG_DEBUG("Sending notification: %lu", notification_bits);
-    LOG_DEBUG("LINK_UP %d", notification_bits & NETWORK_NOTIFY_LINK_UP);
-    LOG_DEBUG("LINK_DOWN %d", notification_bits & NETWORK_NOTIFY_LINK_DOWN);
-    LOG_DEBUG("READY %d", notification_bits & NETWORK_NOTIFY_READY);
-    LOG_DEBUG("NOT_READY %d", notification_bits & NETWORK_NOTIFY_NOT_READY);
-    LOG_DEBUG("IP_CHANGED %d", notification_bits & NETWORK_NOTIFY_IP_CHANGED);
+    LOG_DEBUG("Sending notification: LINK_UP %d, LINK_DOWN %d, READY %d, NOT_READY %d, IP_CHANGED %d", 
+              notification_bits & NETWORK_NOTIFY_LINK_UP, 
+              notification_bits & NETWORK_NOTIFY_LINK_DOWN, 
+              notification_bits & NETWORK_NOTIFY_READY, 
+              notification_bits & NETWORK_NOTIFY_NOT_READY, 
+              notification_bits & NETWORK_NOTIFY_IP_CHANGED);
     
     // Send notification to all registered tasks
     for (int i = 0; i < MAX_NOTIFICATION_TASKS; i++)
@@ -238,7 +240,7 @@ static void vNetworkTask(void *pvParameters)
     
     LOG_INFO("Network task started");
     
-    // Initialize network based on configuration
+    // Load network configuration to determine DHCP vs Static mode
     wiz_NetInfo net_info;
     if (!config_get_net_info(&net_info))
     {
@@ -248,15 +250,10 @@ static void vNetworkTask(void *pvParameters)
     }
     
     s_dhcp_enabled = (net_info.dhcp == NETINFO_DHCP);
+    LOG_INFO("Network mode: %s", s_dhcp_enabled ? "DHCP" : "Static IP");
     
-    if (s_dhcp_enabled)
-    {
-        network_dhcp_init();
-    }
-    else
-    {
-        network_static_init();
-    }
+    // Small delay to ensure other tasks are initialized and has been registered for notifications
+    vTaskDelay(pdMS_TO_TICKS(100));
     
     while (1)
     {
