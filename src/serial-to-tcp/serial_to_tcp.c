@@ -167,7 +167,36 @@ static int32_t s2tcp_handle_server(s2tcp_context_t *ctx)
             break;
             
         case SOCK_CLOSE_WAIT:
-            LOG_DEBUG("Client disconnecting");
+            LOG_DEBUG("Client disconnecting - draining remaining data");
+            
+            // Drain ALL remaining data from TCP socket before closing
+            // Loop until receive buffer is empty
+            while ((size = getSn_RX_RSR(sn)) > 0)
+            {
+                if (size > TCP_BUFFER_SIZE)
+                    size = TCP_BUFFER_SIZE;
+                
+                ret = recv(sn, s_tcp_buf, size);
+                if (ret <= 0)
+                {
+                    LOG_WARN("Error draining socket buffer: %d", ret);
+                    break;  // Exit loop but still disconnect below
+                }
+                
+                // Send all remaining data to UART
+                size = (uint16_t)ret;
+                for (uint16_t i = 0; i < size; i++)
+                {
+                    uart_putc_raw(ctx->uart, s_tcp_buf[i]);
+                }
+                
+                LOG_DEBUG("Drained %u bytes from closing socket", size);
+            }
+            
+            // Note: We do NOT read from UART here - connection is closing,
+            // any UART data would have nowhere to go and would be lost anyway
+            
+            // Now close the connection
             if ((ret = disconnect(sn)) != SOCK_OK)
                 return ret;
             LOG_INFO("Socket closed");
@@ -264,7 +293,36 @@ static int32_t s2tcp_handle_client(s2tcp_context_t *ctx)
             break;
             
         case SOCK_CLOSE_WAIT:
-            LOG_DEBUG("Server disconnecting");
+            LOG_DEBUG("Server disconnecting - draining remaining data");
+            
+            // Drain ALL remaining data from TCP socket before closing
+            // Loop until receive buffer is empty
+            while ((size = getSn_RX_RSR(sn)) > 0)
+            {
+                if (size > TCP_BUFFER_SIZE)
+                    size = TCP_BUFFER_SIZE;
+                
+                ret = recv(sn, s_tcp_buf, size);
+                if (ret <= 0)
+                {
+                    LOG_WARN("Error draining socket buffer: %d", ret);
+                    break;  // Exit loop but still disconnect below
+                }
+                
+                // Send all remaining data to UART
+                size = (uint16_t)ret;
+                for (uint16_t i = 0; i < size; i++)
+                {
+                    uart_putc_raw(ctx->uart, s_tcp_buf[i]);
+                }
+                
+                LOG_DEBUG("Drained %u bytes from closing socket", size);
+            }
+            
+            // Note: We do NOT read from UART here - connection is closing,
+            // any UART data would have nowhere to go and would be lost anyway
+            
+            // Now close the connection
             if ((ret = disconnect(sn)) != SOCK_OK)
                 return ret;
             LOG_INFO("Socket closed");
