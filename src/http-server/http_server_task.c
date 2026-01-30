@@ -39,7 +39,7 @@ static bool wait_for_network_ready(uint32_t timeout_ms)
 {
     uint32_t start_time = xTaskGetTickCount();
     
-    LOG_INFO("[HTTP] Waiting for network to be ready...");
+    LOG_INFO("Waiting for network to be ready...");
     
     while ((xTaskGetTickCount() - start_time) < pdMS_TO_TICKS(timeout_ms))
     {
@@ -75,14 +75,14 @@ static void vHttpServerTask(void *pvParameters)
     network_task_register_notification(NULL);
     
     // Wait for network to be ready (link up and IP assigned)
-    LOG_INFO("[HTTP] Waiting for network to be ready...");
+    LOG_INFO("Waiting for network to be ready...");
     if (!wait_for_network_ready(30000))  // 30 second timeout
     {
-        LOG_WARN("[HTTP] Network not ready after timeout, starting anyway");
+        LOG_WARN("Network not ready after timeout, starting anyway");
     }
     else
     {
-        LOG_INFO("[HTTP] Network ready");
+        LOG_INFO("Network ready");
     }
     
     bool network_ready = true;
@@ -96,19 +96,19 @@ static void vHttpServerTask(void *pvParameters)
         {
             if (notification_value & NETWORK_NOTIFY_NOT_READY)
             {
-                LOG_WARN("[HTTP] Network not ready");
+                LOG_WARN("Network not ready");
                 network_ready = false;
             }
             
             if (notification_value & NETWORK_NOTIFY_READY)
             {
-                LOG_INFO("[HTTP] Network ready");
+                LOG_INFO("Network ready");
                 network_ready = true;
             }
             
             if (notification_value & NETWORK_NOTIFY_IP_CHANGED)
             {
-                LOG_INFO("[HTTP] Network IP changed");
+                LOG_INFO("Network IP changed");
             }
         }
         
@@ -160,7 +160,7 @@ bool http_server_task_create(void)
     
     if (result != pdPASS)
     {
-        LOG_ERROR("[HTTP] Failed to create HTTP server task");
+        LOG_ERROR("Failed to create HTTP server task");
         return false;
     }
     
