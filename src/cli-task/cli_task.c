@@ -687,7 +687,7 @@ static const CLI_Command_Definition_t xUptime = {
 };
 
 
-void vCreateCLITask(void)
+bool cli_task_init(void)
 {
     // Register commands
     FreeRTOS_CLIRegisterCommand(&xTaskStats);
@@ -696,6 +696,22 @@ void vCreateCLITask(void)
     FreeRTOS_CLIRegisterCommand(&xUptime);
 
     // Create the task
-    xTaskCreate(vCLITask, "CLI_Task", CLI_TASK_STACK_SIZE, NULL, CLI_TASK_PRIORITY, NULL);
+    BaseType_t result = xTaskCreate(
+        vCLITask,
+        "CLI_Task",
+        CLI_TASK_STACK_SIZE,
+        NULL,
+        CLI_TASK_PRIORITY,
+        NULL
+    );
+    
+    if (result != pdPASS)
+    {
+        LOG_ERROR("Failed to create CLI task");
+        return false;
+    }
+    
+    LOG_INFO("CLI task created successfully");
+    return true;
 }
 

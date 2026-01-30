@@ -15,7 +15,7 @@
 #include <stdbool.h>
 
 /**
- * @brief Create and start the Serial-to-TCP bridge task
+ * @brief Initialize and create the Serial-to-TCP bridge task
  * 
  * This function creates a FreeRTOS task that manages the serial-to-TCP bridge.
  * The task reads configuration from the system config once at startup and 
@@ -30,9 +30,11 @@
  * - Handle reconnections and errors automatically
  * - Respond to network status changes (link down, IP changes)
  * 
+ * @return true if task created successfully, false otherwise
+ * 
  * @note Configuration is read once at task startup. To apply configuration
  *       changes, the system must be rebooted.
  */
-void vCreateSerialToTcpTask(void);
+bool serial_to_tcp_task_init(void);
 
 #endif /* SERIAL_TO_TCP_H */

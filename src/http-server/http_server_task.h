@@ -14,25 +14,18 @@
 #include <stdbool.h>
 
 /**
- * @brief Initialize HTTP server
+ * @brief Initialize and create the HTTP server task
  * 
- * This function initializes the HTTP server with buffers and socket configuration.
- * Must be called before creating the HTTP server task.
+ * This function initializes the HTTP server with buffers and socket configuration,
+ * then creates the HTTP server FreeRTOS task.
  * 
- * @return true if initialization successful, false otherwise
+ * The task will:
+ * - Wait for network to be ready (link up and IP assigned)
+ * - Run the HTTP server for configuration management on port 80
+ * - Handle network status changes automatically
+ * 
+ * @return true if initialization and task creation successful, false otherwise
  */
 bool http_server_task_init(void);
-
-/**
- * @brief Create and start the HTTP server FreeRTOS task
- * 
- * This function creates the HTTP server task which:
- * - Waits for network to be ready (link up and IP assigned)
- * - Runs the HTTP server for configuration management
- * - Handles network status changes automatically
- * 
- * @return true if task created successfully, false otherwise
- */
-bool http_server_task_create(void);
 
 #endif // _HTTP_SERVER_TASK_H_

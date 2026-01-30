@@ -557,13 +557,11 @@ static void vSerialToTcpTask(void *pvParameters)
 }
 
 /**
- * @brief Create the Serial-to-TCP bridge task
+ * @brief Initialize and create the Serial-to-TCP bridge task
  */
-void vCreateSerialToTcpTask(void)
+bool serial_to_tcp_task_init(void)
 {
-    BaseType_t xReturned;
-    
-    xReturned = xTaskCreate(
+    BaseType_t result = xTaskCreate(
         vSerialToTcpTask,
         "S2TCP_Task",
         S2TCP_TASK_STACK_SIZE,
@@ -572,12 +570,12 @@ void vCreateSerialToTcpTask(void)
         NULL
     );
     
-    if (xReturned != pdPASS)
+    if (result != pdPASS)
     {
         LOG_ERROR("Failed to create Serial-to-TCP task");
+        return false;
     }
-    else
-    {
-        LOG_INFO("Serial-to-TCP task created successfully");
-    }
+    
+    LOG_INFO("Serial-to-TCP task created successfully");
+    return true;
 }

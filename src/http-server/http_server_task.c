@@ -134,21 +134,17 @@ static void vHttpServerTask(void *pvParameters)
 /**
  * @brief Initialize HTTP server
  */
+/**
+ * @brief Initialize and create the HTTP server task
+ */
 bool http_server_task_init(void)
 {
-    // Initialize HTTP Server
+    // Initialize HTTP Server library
     httpServer_init(g_http_send_buf, g_http_recv_buf, HTTP_SOCKET_MAX_NUM, g_http_socket_num_list);
     reg_httpServer_webContent("index.html", index_page);
     LOG_INFO("HTTP Server initialized on port 80");
     
-    return true;
-}
-
-/**
- * @brief Create and start the HTTP server FreeRTOS task
- */
-bool http_server_task_create(void)
-{
+    // Create the HTTP server FreeRTOS task
     BaseType_t result = xTaskCreate(
         vHttpServerTask,
         "HTTP Server",
@@ -164,5 +160,6 @@ bool http_server_task_create(void)
         return false;
     }
     
+    LOG_INFO("HTTP server task created successfully");
     return true;
 }

@@ -50,32 +50,30 @@ int main()
         LOG_WARN("Using default configuration");
     }
 
-    // Initialize network management task (handles Wiznet chip and DHCP)
+    // Initialize and create FreeRTOS tasks
     if (!network_task_init())
     {
         LOG_ERROR("Failed to initialize network task");
         return 1;
     }
     
-    // Give network task time to initialize
-    sleep_ms(2000);
-
-    // Initialize HTTP Server
     if (!http_server_task_init())
     {
-        LOG_ERROR("Failed to initialize HTTP server");
-        return 1;
-    }
-
-    // Create FreeRTOS tasks
-    if (!http_server_task_create())
-    {
-        LOG_ERROR("Failed to create HTTP server task");
+        LOG_ERROR("Failed to initialize HTTP server task");
         return 1;
     }
     
-    vCreateCLITask();           // CLI task on UART0
-    vCreateSerialToTcpTask();   // Serial-to-TCP bridge task
+    if (!cli_task_init())
+    {
+        LOG_ERROR("Failed to initialize CLI task");
+        return 1;
+    }
+    
+    if (!serial_to_tcp_task_init())
+    {
+        LOG_ERROR("Failed to initialize Serial-to-TCP task");
+        return 1;
+    }
 
     LOG_INFO("Starting FreeRTOS scheduler...");
     vTaskStartScheduler();
