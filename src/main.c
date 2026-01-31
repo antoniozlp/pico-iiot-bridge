@@ -23,15 +23,8 @@ int main()
     printf("  Pico I-IoT Bridge Starting...\n");
     printf("===========================================\n\n");
     
-    // Initialize logger system (must be early, before other tasks)
-    logger_config_t logger_cfg = {
-        .filter_level = LOG_LEVEL_DEBUG,  // Change to LOG_LEVEL_DEBUG for verbose output
-        .include_timestamp = true,
-        .include_task_name = true,
-        .use_colors = true
-    };
     
-    if (!logger_init(&logger_cfg))
+    if (!logger_init(NULL))
     {
         printf("ERROR: Failed to initialize logger!\n");
         return 1;

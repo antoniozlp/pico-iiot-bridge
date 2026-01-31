@@ -15,6 +15,8 @@
 
 #include "pico/stdlib.h"
 
+#include "system_config.h"
+
 // Logger configuration
 #define LOGGER_TASK_PRIORITY        (tskIDLE_PRIORITY + 1)  // Low priority
 #define LOGGER_TASK_STACK_SIZE      (configMINIMAL_STACK_SIZE * 4)  // 2KB stack
@@ -102,6 +104,18 @@ static void vLoggerTask(void *pvParameters)
     log_message_t msg;
     
     LOG_INFO("Logger task started");
+
+    // Load device configuration from flash
+    device_config_t device_config;
+    if (config_get_device_config(&device_config))
+    {
+        memcpy(&s_config, &device_config.logger_config, sizeof(logger_config_t));
+        LOG_INFO("Logger configuration loaded successfully (level=%s)", get_level_name(s_config.filter_level));
+    }
+    else
+    {
+        LOG_WARN("Failed to load logger configuration from device configuration. Using default logger configuration");
+    }
     
     while (1)
     {
