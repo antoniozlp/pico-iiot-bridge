@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include "pico/stdlib.h"
@@ -26,6 +27,15 @@ void config_set_default(void)
     g_sys_cfg.version.major = CONFIG_VERSION_MAJOR;
     g_sys_cfg.version.minor = CONFIG_VERSION_MINOR;
     g_sys_cfg.version.patch = CONFIG_VERSION_PATCH;
+
+    // Device config
+    memset(g_sys_cfg.device.device_id, 0, 20);
+    uint8_t device_id[] = "DEFAULT_DEVICE_ID";
+    memcpy(g_sys_cfg.device.device_id, device_id, sizeof(device_id));
+    g_sys_cfg.device.logger_config.filter_level = LOG_LEVEL_INFO;
+    g_sys_cfg.device.logger_config.include_timestamp = true;
+    g_sys_cfg.device.logger_config.include_task_name = true;
+    g_sys_cfg.device.logger_config.use_colors = true;
 
     // Network defaults
     uint8_t mac[6] = {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56};
@@ -144,6 +154,27 @@ bool config_get_version(config_version_t *version)
         return true;
     }
     return false;
+}
+
+bool config_get_device_config(device_config_t *device_config)
+{
+    if (device_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(device_config, &g_sys_cfg.device, sizeof(device_config_t));
+    return true;
+}
+
+bool config_set_device_config(device_config_t *device_config)
+{
+    if (device_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(&g_sys_cfg.device, device_config, sizeof(device_config_t));
+    g_config_changed = true;
+    return true;
 }
 
 bool config_get_serial_config(uint8_t uart_id, serial_config_t *serial_config)

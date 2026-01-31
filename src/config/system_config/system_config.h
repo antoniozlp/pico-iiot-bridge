@@ -5,6 +5,7 @@
 #include "wizchip_conf.h"
 #include "hardware/uart.h"
 #include "hardware/flash.h"
+#include "logger.h"
 
 // Flash configuration
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
@@ -22,6 +23,12 @@ typedef struct
     uint8_t minor;
     uint8_t patch;
 } config_version_t;
+
+typedef struct 
+{
+	uint8_t device_id[20];
+	logger_config_t logger_config;
+} device_config_t;
 
 typedef struct
 {
@@ -56,6 +63,7 @@ typedef struct
 typedef struct
 {
 	config_version_t version;
+	device_config_t device;
     wiz_NetInfo net_info;
     serial_config_t serial0;
     serial_config_t serial1;
@@ -69,6 +77,10 @@ bool config_save_to_flash(void);
 
 // Version
 bool config_get_version(config_version_t *version);
+
+// Device configuration
+bool config_get_device_config(device_config_t *device_config);
+bool config_set_device_config(device_config_t *device_config);
 
 // Network configuration
 bool config_get_net_info(wiz_NetInfo *net_info);
