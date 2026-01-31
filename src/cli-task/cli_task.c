@@ -207,10 +207,11 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
     if(pcParameter == NULL){
         snprintf(pcWriteBuffer, xWriteBufferLen, 
                 "Usage:\r\n"
-                "  config read <serial0|serial1|network|s2tcp>\r\n"
+                "  config read <serial0|serial1|network|s2tcp|device>\r\n"
                 "  config write serial0|serial1 <baud|databits|parity|stopbits|flowcts|flowrts> <value>\r\n"
                 "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
                 "  config write s2tcp <enable|serial|mode|port|timeout|keepalive|maxconn|remoteip|remoteport> <value>\r\n"
+                "  config write device <deviceid|loglevel|timestamp|taskname|colors> <value>\r\n"
                 "  config save\r\n"
                 "Type 'help config' or 'config write' for more details.\r\n");
         return pdFALSE;
@@ -220,7 +221,7 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
         pcParameter = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xParameterStringLength);
         
         if (pcParameter == NULL){
-            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Missing config type. Use 'serial0', 'serial1', 'network', or 's2tcp'\r\n");
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Missing config type. Use 'serial0', 'serial1', 'network', 's2tcp', or 'device'\r\n");
             return pdFALSE;
         }
 
@@ -293,8 +294,31 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
             }
             return pdFALSE;
         }
+        else if (strncmp(pcParameter, "device", 6) == 0) {
+            device_config_t device_config;
+            if (!config_get_device_config(&device_config))
+            {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get device config\r\n");
+                return pdFALSE;
+            }
+            
+            size_t len = 0;
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "Device Configuration:\r\n");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Device ID       : %s\r\n", device_config.device_id);
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Log Level       : %s\r\n", 
+                           device_config.logger_config.filter_level == LOG_LEVEL_ERROR ? "ERROR" :
+                           device_config.logger_config.filter_level == LOG_LEVEL_WARN ? "WARN" :
+                           device_config.logger_config.filter_level == LOG_LEVEL_INFO ? "INFO" : "DEBUG");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Timestamp       : %s\r\n", 
+                           device_config.logger_config.include_timestamp ? "Yes" : "No");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Task Name       : %s\r\n", 
+                           device_config.logger_config.include_task_name ? "Yes" : "No");
+            len += snprintf(pcWriteBuffer + len, xWriteBufferLen - len, "  Colors          : %s\r\n", 
+                           device_config.logger_config.use_colors ? "Yes" : "No");
+            return pdFALSE;
+        }
         else {
-            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Option not supported. Use 'serial0', 'serial1', 'network', or 's2tcp'\r\n");
+            snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Option not supported. Use 'serial0', 'serial1', 'network', 's2tcp', or 'device'\r\n");
             return pdFALSE;
         }
     }
@@ -322,7 +346,12 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
                     "  config write s2tcp keepalive <1-600>\r\n"
                     "  config write s2tcp maxconn <1-4>\r\n"
                     "  config write s2tcp remoteip <a.b.c.d>\r\n"
-                    "  config write s2tcp remoteport <1024-65535>\r\n");
+                    "  config write s2tcp remoteport <1024-65535>\r\n"
+                    "  config write device deviceid <string>\r\n"
+                    "  config write device loglevel <error|warn|info|debug>\r\n"
+                    "  config write device timestamp <0|1>\r\n"
+                    "  config write device taskname <0|1>\r\n"
+                    "  config write device colors <0|1>\r\n");
             return pdFALSE;
         }
 
@@ -628,9 +657,95 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
             }
             return pdFALSE;
         }
+        // === DEVICE CONFIGURATION ===
+        else if (strncmp(pcParameter, "device", 6) == 0) {
+            BaseType_t xFieldLength, xValueLength;
+            const char *pcField = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xFieldLength);
+            const char *pcValue = FreeRTOS_CLIGetParameter(pcCommandString, 4, &xValueLength);
+            
+            if (pcField == NULL || pcValue == NULL) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Usage: config write device <deviceid|loglevel|timestamp|taskname|colors> <value>\r\n");
+                return pdFALSE;
+            }
+            
+            device_config_t device_config;
+            if (!config_get_device_config(&device_config)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to get device config\r\n");
+                return pdFALSE;
+            }
+            
+            char value_buf[32];
+            if (!copy_param_to_buffer(pcValue, xValueLength, value_buf, sizeof(value_buf))) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid parameter\r\n");
+                return pdFALSE;
+            }
+            
+            if (strncmp(pcField, "deviceid", 8) == 0) {
+                if (xValueLength >= sizeof(device_config.device_id)) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Device ID too long (max %d chars)\r\n", 
+                            (int)sizeof(device_config.device_id) - 1);
+                    return pdFALSE;
+                }
+                memset(device_config.device_id, 0, sizeof(device_config.device_id));
+                memcpy(device_config.device_id, value_buf, strlen(value_buf));
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Device ID set to '%s'\r\n", device_config.device_id);
+            }
+            else if (strncmp(pcField, "loglevel", 8) == 0) {
+                if (strcmp(value_buf, "error") == 0 || strcmp(value_buf, "0") == 0) {
+                    device_config.logger_config.filter_level = LOG_LEVEL_ERROR;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Log level set to ERROR\r\n");
+                }
+                else if (strcmp(value_buf, "warn") == 0 || strcmp(value_buf, "1") == 0) {
+                    device_config.logger_config.filter_level = LOG_LEVEL_WARN;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Log level set to WARN\r\n");
+                }
+                else if (strcmp(value_buf, "info") == 0 || strcmp(value_buf, "2") == 0) {
+                    device_config.logger_config.filter_level = LOG_LEVEL_INFO;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Log level set to INFO\r\n");
+                }
+                else if (strcmp(value_buf, "debug") == 0 || strcmp(value_buf, "3") == 0) {
+                    device_config.logger_config.filter_level = LOG_LEVEL_DEBUG;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Log level set to DEBUG\r\n");
+                }
+                else {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Log level must be error, warn, info, or debug\r\n");
+                    return pdFALSE;
+                }
+            }
+            else if (strncmp(pcField, "timestamp", 9) == 0) {
+                int val = atoi(value_buf);
+                device_config.logger_config.include_timestamp = (val != 0);
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Timestamp %s\r\n", 
+                        device_config.logger_config.include_timestamp ? "enabled" : "disabled");
+            }
+            else if (strncmp(pcField, "taskname", 8) == 0) {
+                int val = atoi(value_buf);
+                device_config.logger_config.include_task_name = (val != 0);
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Task name %s\r\n", 
+                        device_config.logger_config.include_task_name ? "enabled" : "disabled");
+            }
+            else if (strncmp(pcField, "colors", 6) == 0) {
+                int val = atoi(value_buf);
+                device_config.logger_config.use_colors = (val != 0);
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Colors %s\r\n", 
+                        device_config.logger_config.use_colors ? "enabled" : "disabled");
+            }
+            else {
+                snprintf(pcWriteBuffer, xWriteBufferLen, 
+                        "Error: Unknown field. Use deviceid, loglevel, timestamp, taskname, or colors\r\n");
+                return pdFALSE;
+            }
+            
+            if (!config_set_device_config(&device_config)) {
+                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Failed to set device config\r\n");
+                return pdFALSE;
+            }
+            return pdFALSE;
+        }
         else {
             snprintf(pcWriteBuffer, xWriteBufferLen, 
-                    "Error: Unknown config type. Use 'serial0', 'serial1', 'network', or 's2tcp'\r\n");
+                    "Error: Unknown config type. Use 'serial0', 'serial1', 'network', 's2tcp', or 'device'\r\n");
             return pdFALSE;
         }
     }
@@ -654,10 +769,11 @@ static const CLI_Command_Definition_t xConfig = {
     "config",
     "\r\nconfig - Configuration management\r\n"
     "Usage:\r\n"
-    "  config read <serial0|serial1|network|s2tcp>\r\n"
+    "  config read <serial0|serial1|network|s2tcp|device>\r\n"
     "  config write serial0|serial1 <baud|databits|parity|stopbits|flowcts|flowrts> <value>\r\n"
     "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
     "  config write s2tcp <enable|serial|mode|port|timeout|keepalive|maxconn|remoteip|remoteport> <value>\r\n"
+    "  config write device <deviceid|loglevel|timestamp|taskname|colors> <value>\r\n"
     "  config save\r\n"
     "Type 'config write' for detailed parameter ranges.\r\n",
     prvConfigCommand,
