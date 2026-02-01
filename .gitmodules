@@ -4,3 +4,6 @@
 [submodule "lib/WIZnet/ioLibrary_Driver"]
 	path = lib/WIZnet/ioLibrary_Driver
 	url = https://github.com/Wiznet/ioLibrary_Driver.git
+[submodule "lib/nanoMODBUS"]
+	path = lib/nanoMODBUS
+	url = git@github.com:debevv/nanoMODBUS.git
