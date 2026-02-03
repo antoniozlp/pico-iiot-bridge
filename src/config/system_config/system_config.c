@@ -1,11 +1,19 @@
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-#include "pico/stdlib.h"
-#include "hardware/flash.h"
-#include "pico/flash.h"
+/**
+ * @file system_config.c
+ * @brief System configuration management with flash persistence
+ */
+
 #include "system_config.h"
+
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "pico/stdlib.h"
+#include "pico/flash.h"
 #include "pico/stdio_uart.h"
+#include "hardware/flash.h"
+
 #include "pico_flash_storage.h"
 #include "logger.h"
 
@@ -13,12 +21,18 @@
 system_config_t g_sys_cfg;
 
 // Global configuration flags
-// g_config_loaded: True if configuration has been loaded from flash
-bool g_config_loaded = false;
-// g_config_changed: True if configuration has been changed since last load or save
-bool g_config_changed = false;
+bool g_config_loaded = false;   // True if configuration has been loaded from flash
+bool g_config_changed = false;  // True if configuration has been changed since last save
 
-
+/**
+ * @brief Set system configuration to factory defaults
+ * 
+ * Initializes all configuration values to their factory defaults:
+ * - Network: Static IP 192.168.11.3
+ * - Serial ports: 115200 baud, 8N1
+ * - Serial-to-TCP: Disabled
+ * - Logger: INFO level with timestamps
+ */
 void config_set_default(void)
 {
     memset(&g_sys_cfg, 0, sizeof(system_config_t));
@@ -81,6 +95,14 @@ void config_set_default(void)
     g_sys_cfg.serial_to_tcp_mode.remote_port = 5001;
 }
 
+/**
+ * @brief Load system configuration from flash memory
+ * 
+ * Reads configuration from flash and validates version.
+ * If validation fails, loads factory defaults instead.
+ * 
+ * @return true if valid config loaded from flash, false if defaults loaded
+ */
 bool config_load_from_flash(void)
 {
     const uint8_t *flash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
@@ -111,7 +133,14 @@ bool config_load_from_flash(void)
     }
 }
 
-
+/**
+ * @brief Save system configuration to flash memory
+ * 
+ * Writes current configuration to flash using flash_storage_write().
+ * Skips write if no changes have been made since last save.
+ * 
+ * @return true if save successful or nothing to save, false on error
+ */
 bool config_save_to_flash(void)
 {
     
@@ -146,6 +175,12 @@ bool config_save_to_flash(void)
     }
 }
 
+/**
+ * @brief Get configuration version
+ * 
+ * @param version Pointer to version structure to fill
+ * @return true on success, false if version is NULL or config not loaded
+ */
 bool config_get_version(config_version_t *version)
 {
     if (version != NULL && g_config_loaded)
@@ -156,6 +191,12 @@ bool config_get_version(config_version_t *version)
     return false;
 }
 
+/**
+ * @brief Get device configuration
+ * 
+ * @param device_config Pointer to device_config structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
 bool config_get_device_config(device_config_t *device_config)
 {
     if (device_config == NULL || !g_config_loaded)
@@ -166,6 +207,14 @@ bool config_get_device_config(device_config_t *device_config)
     return true;
 }
 
+/**
+ * @brief Set device configuration
+ * 
+ * Updates device configuration and marks config as changed.
+ * 
+ * @param device_config Pointer to device_config structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
 bool config_set_device_config(device_config_t *device_config)
 {
     if (device_config == NULL || !g_config_loaded)
@@ -177,6 +226,13 @@ bool config_set_device_config(device_config_t *device_config)
     return true;
 }
 
+/**
+ * @brief Get serial port configuration
+ * 
+ * @param uart_id UART ID (0 or 1)
+ * @param serial_config Pointer to serial_config structure to fill
+ * @return true on success, false if parameters invalid or config not loaded
+ */
 bool config_get_serial_config(uint8_t uart_id, serial_config_t *serial_config)
 {
     if (serial_config == NULL || !g_config_loaded || uart_id > 1)
@@ -195,6 +251,15 @@ bool config_get_serial_config(uint8_t uart_id, serial_config_t *serial_config)
     return true;
 }
 
+/**
+ * @brief Set serial port configuration
+ * 
+ * Updates serial configuration and marks config as changed if values differ.
+ * 
+ * @param uart_id UART ID (0 or 1)
+ * @param serial_config Pointer to serial_config structure with new values
+ * @return true on success, false if parameters invalid or config not loaded
+ */
 bool config_set_serial_config(uint8_t uart_id, serial_config_t *serial_config)
 {
     if (serial_config == NULL || !g_config_loaded || uart_id > 1)
@@ -212,6 +277,12 @@ bool config_set_serial_config(uint8_t uart_id, serial_config_t *serial_config)
     return true;
 }
 
+/**
+ * @brief Get serial-to-TCP mode configuration
+ * 
+ * @param mode_config Pointer to serial_to_tcp_mode_config structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
 bool config_get_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config)
 {
     if (mode_config == NULL || !g_config_loaded)
@@ -223,6 +294,14 @@ bool config_get_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config)
     return true;
 }
 
+/**
+ * @brief Set serial-to-TCP mode configuration
+ * 
+ * Updates serial-to-TCP configuration and marks config as changed if values differ.
+ * 
+ * @param mode_config Pointer to serial_to_tcp_mode_config structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
 bool config_set_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config)
 {
     if (mode_config == NULL || !g_config_loaded)
@@ -238,6 +317,12 @@ bool config_set_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config)
     return true;
 }
 
+/**
+ * @brief Get network configuration
+ * 
+ * @param net_info Pointer to wiz_NetInfo structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
 bool config_get_net_info(wiz_NetInfo *net_info)
 {
     if (net_info != NULL && g_config_loaded)
@@ -248,6 +333,14 @@ bool config_get_net_info(wiz_NetInfo *net_info)
     return false;
 }
 
+/**
+ * @brief Set network configuration
+ * 
+ * Updates network configuration and marks config as changed if values differ.
+ * 
+ * @param net_info Pointer to wiz_NetInfo structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
 bool config_set_net_info(wiz_NetInfo *net_info)
 {
     if (net_info == NULL || !g_config_loaded)

@@ -1,9 +1,15 @@
+/**
+ * @file board_config.c
+ * @brief Board-specific hardware configuration and initialization
+ */
+
 #include "board_config.h"
+
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
 
 /**
- * @brief Initialize board-specific hardware configuration
+ * @brief Initialize board-specific GPIO configuration
  * 
  * This function initializes all GPIO pins, peripherals, and hardware
  * configurations specific to the board. Call this function early in
