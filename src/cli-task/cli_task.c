@@ -1,16 +1,24 @@
-#include <FreeRTOS.h>
-#include <task.h>
-#include <FreeRTOS_CLI.h>
+/**
+ * @file cli_task.c
+ * @brief Command Line Interface task implementation
+ */
+
+#include "cli_task.h"
+
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "FreeRTOS_CLI.h"
 
 #include "pico/stdlib.h"
 #include "hardware/watchdog.h"
-#include "cli_task.h"
-#include "pico_flash_storage.h"
-#include "system_config.h"
+
 #include "wizchip_conf.h"
+
+#include "system_config.h"
 #include "logger.h"
 
 // Definition of the task priority and stack size
@@ -26,17 +34,22 @@
 #define POLL_SLOW_MS    100    // Slow polling when idle
 #define IDLE_THRESHOLD  500    // Number of idle loops before slowing down (100ms at 1ms = 100ms idle)
 
-// Global buffers
-static char cInputString[MAX_INPUT_LENGTH];
-static char cOutputString[MAX_OUTPUT_LENGTH];
+// Static buffers for CLI input/output
+static char s_input_buffer[MAX_INPUT_LENGTH];
+static char s_output_buffer[MAX_OUTPUT_LENGTH];
 
-// Task function
+/**
+ * @brief CLI Task
+ * 
+ * Handles command-line interface input/output via UART.
+ * Processes user commands using FreeRTOS-Plus-CLI.
+ */
 static void vCLITask(void *pvParameters)
 {
     (void) pvParameters;
-    int cRxedChar;
-    int cInputIndex = 0;
-    BaseType_t xMoreDataToFollow;
+    int rxed_char;
+    int input_index = 0;
+    BaseType_t more_data_to_follow;
     
     int poll_delay_ms = POLL_SLOW_MS;  // Start with slow polling
     int idle_counter = 0;
@@ -46,9 +59,9 @@ static void vCLITask(void *pvParameters)
     while (1)
     {
         // Read character from stdin (UART) - use timeout to prevent blocking other tasks on the same core
-        cRxedChar = getchar_timeout_us(0);
+        rxed_char = getchar_timeout_us(0);
 
-        if (cRxedChar == '\r' || cRxedChar == '\n')
+        if (rxed_char == '\r' || rxed_char == '\n')
         {
             // Lock stdio for exclusive access during command processing
             // If lock fails, proceed anyway - CLI must remain functional
@@ -57,21 +70,21 @@ static void vCLITask(void *pvParameters)
             printf("\n");
 
             // Process command only if buffer is not empty
-            if (cInputIndex > 0)
+            if (input_index > 0)
             {
                 // Terminate the string
-                cInputString[cInputIndex] = '\0';
+                s_input_buffer[input_index] = '\0';
 
                 // Process the command
                 do
                 {
-                    xMoreDataToFollow = FreeRTOS_CLIProcessCommand(cInputString, cOutputString, MAX_OUTPUT_LENGTH);
-                    printf("%s", cOutputString);
-                } while (xMoreDataToFollow != pdFALSE);
+                    more_data_to_follow = FreeRTOS_CLIProcessCommand(s_input_buffer, s_output_buffer, MAX_OUTPUT_LENGTH);
+                    printf("%s", s_output_buffer);
+                } while (more_data_to_follow != pdFALSE);
 
                 // Clear input buffer
-                cInputIndex = 0;
-                memset(cInputString, 0, MAX_INPUT_LENGTH);
+                input_index = 0;
+                memset(s_input_buffer, 0, MAX_INPUT_LENGTH);
             }
 
             printf("\n> ");
@@ -81,7 +94,7 @@ static void vCLITask(void *pvParameters)
                 logger_unlock_stdio();
             }
         }
-        else if (cRxedChar == PICO_ERROR_TIMEOUT) 
+        else if (rxed_char == PICO_ERROR_TIMEOUT) 
         {
              // No character received, yield to allow other tasks to run
              vTaskDelay(pdMS_TO_TICKS(poll_delay_ms));
@@ -101,20 +114,20 @@ static void vCLITask(void *pvParameters)
             // If lock fails, proceed anyway - echo must remain responsive
             bool locked = logger_lock_stdio();
             
-            if (cRxedChar == 8 || cRxedChar == 127) // Backspace
+            if (rxed_char == 8 || rxed_char == 127) // Backspace
             {
-                if (cInputIndex > 0)
+                if (input_index > 0)
                 {
-                    cInputIndex--;
+                    input_index--;
                     printf("\b \b");
                 }
             }
-            else if (cInputIndex < MAX_INPUT_LENGTH - 1)
+            else if (input_index < MAX_INPUT_LENGTH - 1)
             {
                 // Echo character
-                putchar(cRxedChar);
-                cInputString[cInputIndex] = (char) cRxedChar;
-                cInputIndex++;
+                putchar(rxed_char);
+                s_input_buffer[input_index] = (char) rxed_char;
+                input_index++;
             }
             
             // Unlock stdio
@@ -131,7 +144,16 @@ static void vCLITask(void *pvParameters)
     }
 }
 
-// Example command implementation
+/**
+ * @brief CLI command handler: task-stats
+ * 
+ * Displays a table showing the state of each FreeRTOS task.
+ * 
+ * @param pcWriteBuffer Buffer to write command output
+ * @param xWriteBufferLen Size of output buffer
+ * @param pcCommandString The command string (unused)
+ * @return pdFALSE to indicate command is complete
+ */
 static BaseType_t prvTaskStatsCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
 {
     const char *const pcHeader = "Task          State  Priority  Stack	#\r\n************************************************\r\n";
@@ -165,6 +187,16 @@ static const CLI_Command_Definition_t xTaskStats =
     0
 };
 
+/**
+ * @brief CLI command handler: reboot
+ * 
+ * Reboots the device using the watchdog timer.
+ * 
+ * @param pcWriteBuffer Buffer to write command output
+ * @param xWriteBufferLen Size of output buffer
+ * @param pcCommandString The command string (unused)
+ * @return pdFALSE to indicate command is complete
+ */
 static BaseType_t prvRebootCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
 {
     (void) pcCommandString;
@@ -186,8 +218,15 @@ static const CLI_Command_Definition_t xReboot =
     0
 };
 
-// Helper function to safely copy CLI parameter to null-terminated buffer
-// Returns true on success, false if parameter is too long
+/**
+ * @brief Helper function to safely copy CLI parameter to null-terminated buffer
+ * 
+ * @param param Source parameter string (may not be null-terminated)
+ * @param param_len Length of source parameter
+ * @param buf Destination buffer
+ * @param buf_size Size of destination buffer
+ * @return true on success, false if parameter is too long or invalid
+ */
 static bool copy_param_to_buffer(const char *param, BaseType_t param_len, char *buf, size_t buf_size) {
     if (param == NULL || param_len <= 0 || (size_t)param_len >= buf_size) {
         return pdFALSE;
@@ -197,6 +236,17 @@ static bool copy_param_to_buffer(const char *param, BaseType_t param_len, char *
     return pdTRUE;
 }
 
+/**
+ * @brief CLI command handler: config
+ * 
+ * Manages system configuration (read/write/save).
+ * Supports configuration of: serial ports, network, serial-to-TCP mode, and device settings.
+ * 
+ * @param pcWriteBuffer Buffer to write command output
+ * @param xWriteBufferLen Size of output buffer
+ * @param pcCommandString The command string with parameters
+ * @return pdFALSE to indicate command is complete
+ */
 static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString){
 
     const char *pcParameter;
@@ -781,7 +831,16 @@ static const CLI_Command_Definition_t xConfig = {
 
 };
 
-// Uptime command
+/**
+ * @brief CLI command handler: uptime
+ * 
+ * Shows system uptime in days, hours, minutes, and seconds.
+ * 
+ * @param pcWriteBuffer Buffer to write command output
+ * @param xWriteBufferLen Size of output buffer
+ * @param pcCommandString The command string (unused)
+ * @return pdFALSE to indicate command is complete
+ */
 static BaseType_t prvUptimeCommand(char *pcWriteBuffer, size_t xWriteBufferLen, const char *pcCommandString)
 {
     (void) pcCommandString;
@@ -814,7 +873,7 @@ bool cli_task_init(void)
     // Create the task
     BaseType_t result = xTaskCreate(
         vCLITask,
-        "CLI_Task",
+        "CLI",
         CLI_TASK_STACK_SIZE,
         NULL,
         CLI_TASK_PRIORITY,

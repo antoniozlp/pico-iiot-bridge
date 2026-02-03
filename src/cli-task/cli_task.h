@@ -1,5 +1,5 @@
-#ifndef CLI_TASK_H
-#define CLI_TASK_H
+#ifndef _CLI_TASK_H_
+#define _CLI_TASK_H_
 
 #include <stdbool.h>
 
@@ -12,5 +12,5 @@
  */
 bool cli_task_init(void);
 
-#endif /* CLI_TASK_H */
+#endif // _CLI_TASK_H_
 
