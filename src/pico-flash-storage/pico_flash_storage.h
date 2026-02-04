@@ -1,15 +1,19 @@
-#ifndef PICO_FLASH_STORAGE_H
-#define PICO_FLASH_STORAGE_H
+#ifndef _PICO_FLASH_STORAGE_H_
+#define _PICO_FLASH_STORAGE_H_
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
 /**
- * @brief Initialize the flash storage system.
- *        Should be called before any read/write operations.
+ * @brief Initialize the flash storage system
+ * 
+ * Creates coordination tasks on both cores to safely perform flash operations
+ * in an SMP FreeRTOS environment. Must be called before any read/write operations.
+ * 
+ * @return true if initialization successful, false on error
  */
-void flash_storage_init(void);
+bool flash_storage_init(void);
 
 /**
  * @brief Write data to flash safely in an SMP FreeRTOS environment.
@@ -36,5 +40,5 @@ bool flash_storage_write(uint32_t offset, const uint8_t *data, size_t size);
  */
 void flash_storage_read(uint32_t offset, uint8_t *data, size_t size);
 
-#endif /* PICO_FLASH_STORAGE_H */
+#endif // _PICO_FLASH_STORAGE_H_
 
