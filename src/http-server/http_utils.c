@@ -1,17 +1,28 @@
 /**
-    @file	httpUtil.c
-    @brief	HTTP Server Utilities for HTTP example (local overrides)
-*/
+ * @file http_utils.c
+ * @brief HTTP CGI handlers and utilities implementation
+ */
+
+#include "http_utils.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+
 #include "pico/stdlib.h"
+
 #include "httpUtil.h"
-#include "http_utils.h"
+
 #include "system_config.h"
 #include "logger.h"
 
+/**
+ * @brief Safely copy text string with null termination
+ * 
+ * @param dst Destination buffer
+ * @param dst_len Size of destination buffer
+ * @param src Source string (uint8_t*)
+ */
 static void copy_text(char *dst, size_t dst_len, const uint8_t *src)
 {
 	if(!dst || !src || dst_len == 0) return;
@@ -20,12 +31,24 @@ static void copy_text(char *dst, size_t dst_len, const uint8_t *src)
 	dst[dst_len - 1] = 0;
 }
 
+/**
+ * @brief Parse IP address from string (a.b.c.d format)
+ * 
+ * @param ip Output buffer for 4-byte IP address
+ * @param str Input string in dotted decimal format
+ */
 static void parse_ip_addr(uint8_t *ip, const char *str)
 {
     if (!ip || !str) return;
     sscanf(str, "%hhu.%hhu.%hhu.%hhu", &ip[0], &ip[1], &ip[2], &ip[3]);
 }
 
+/**
+ * @brief Parse MAC address from string (xx:xx:xx:xx:xx:xx format)
+ * 
+ * @param mac Output buffer for 6-byte MAC address
+ * @param str Input string in colon-separated hexadecimal format
+ */
 static void parse_mac_addr(uint8_t *mac, const char *str)
 {
     if (!mac || !str) return;
@@ -33,6 +56,15 @@ static void parse_mac_addr(uint8_t *mac, const char *str)
            &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
 }
 
+/**
+ * @brief Handle network configuration update from CGI
+ * 
+ * Processes set_network.cgi POST request with parameters:
+ * mac, ip, sn (subnet), gw (gateway), dns, dhcp
+ * 
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
 static uint8_t handle_set_network(uint8_t * uri)
 {
     uint8_t changed = 0;
@@ -105,6 +137,15 @@ static uint8_t handle_set_network(uint8_t * uri)
     return changed ? HTTP_OK : HTTP_FAILED;
 }
 
+/**
+ * @brief Handle serial port configuration update from CGI
+ * 
+ * Processes set_serial.cgi POST request with parameters:
+ * uart (0 or 1), baud, databits, parity, stopbits, flowcts, flowrts
+ * 
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
 static uint8_t handle_set_serial(uint8_t * uri)
 {
 	uint8_t changed = 0;
@@ -238,6 +279,15 @@ static uint8_t handle_set_serial(uint8_t * uri)
 	return changed ? HTTP_OK : HTTP_FAILED;
 }
 
+/**
+ * @brief Handle serial-to-TCP configuration update from CGI
+ * 
+ * Processes set_s2tcp.cgi POST request with parameters:
+ * enable, serial, mode, lport, timeout, keepalive, maxconn, remoteip, remoteport
+ * 
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
 static uint8_t handle_set_s2tcp(uint8_t * uri)
 {
 	uint8_t changed = 0;
