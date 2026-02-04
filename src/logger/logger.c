@@ -1,12 +1,16 @@
 /**
  * @file logger.c
- * @brief Logger implementation
+ * @brief Thread-safe logging system implementation
+ * 
+ * Provides a centralized, queue-based logging mechanism that ensures
+ * safe concurrent access to stdio from multiple FreeRTOS tasks.
  */
 
 #include "logger.h"
+
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 
 #include "FreeRTOS.h"
 #include "task.h"

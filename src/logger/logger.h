@@ -19,8 +19,8 @@
  *   LOG_DEBUG("Value = 0x%08X", register_value);
  */
 
-#ifndef LOGGER_H
-#define LOGGER_H
+#ifndef _LOGGER_H_
+#define _LOGGER_H_
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -138,4 +138,4 @@ void logger_log_va(log_level_t level, const char *format, va_list args);
 // Raw output (bypasses logging system, uses printf directly - use sparingly)
 #define LOG_RAW(fmt, ...)   printf(fmt, ##__VA_ARGS__)
 
-#endif /* LOGGER_H */
+#endif // _LOGGER_H_
