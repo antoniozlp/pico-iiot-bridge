@@ -7,9 +7,9 @@
  */
 
 #include "serial_to_tcp.h"
-#include <string.h>
+
 #include <stdio.h>
-#include <limits.h>
+#include <string.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -378,7 +378,7 @@ static bool wait_for_network_ready(uint32_t timeout_ms)
         uint32_t notification_value = 0;
         
         // Wait for notification with timeout
-        if (xTaskNotifyWait(0, ULONG_MAX, &notification_value, pdMS_TO_TICKS(100)) == pdTRUE)
+        if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(100)) == pdTRUE)
         {
             if (notification_value & NETWORK_NOTIFY_READY)
             {
@@ -471,7 +471,7 @@ static void vSerialToTcpTask(void *pvParameters)
             uint32_t notification_value = 0;
             
             // Check for network status changes (non-blocking)
-            if (xTaskNotifyWait(0, ULONG_MAX, &notification_value, 0) == pdTRUE)
+            if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, 0) == pdTRUE)
             {
                 if (notification_value & NETWORK_NOTIFY_NOT_READY)
                 {

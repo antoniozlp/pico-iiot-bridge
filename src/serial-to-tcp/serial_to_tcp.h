@@ -8,8 +8,8 @@
  * a remote server).
  */
 
-#ifndef SERIAL_TO_TCP_H
-#define SERIAL_TO_TCP_H
+#ifndef _SERIAL_TO_TCP_H_
+#define _SERIAL_TO_TCP_H_
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -37,4 +37,4 @@
  */
 bool serial_to_tcp_task_init(void);
 
-#endif /* SERIAL_TO_TCP_H */
+#endif // _SERIAL_TO_TCP_H_
