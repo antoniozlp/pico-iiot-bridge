@@ -10,8 +10,8 @@
  *   add_definitions(-DRTOS_VIEWS_SUPPORT)
  */
 
-#ifndef RTOS_VIEWS_SUPPORT_H
-#define RTOS_VIEWS_SUPPORT_H
+#ifndef _RTOS_VIEWS_SUPPORT_H_
+#define _RTOS_VIEWS_SUPPORT_H_
 
 #include <stdint.h>
 
@@ -50,4 +50,4 @@ uint32_t ulGetRunTimeCounterValue(void);
 }
 #endif
 
-#endif /* RTOS_VIEWS_SUPPORT_H */
+#endif // _RTOS_VIEWS_SUPPORT_H_
