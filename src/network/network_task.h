@@ -73,7 +73,7 @@ bool network_task_get_status(uint8_t ip_address[4], bool *link_status);
  * 
  * // In your task loop:
  * uint32_t notification_value;
- * if (xTaskNotifyWait(0, ULONG_MAX, &notification_value, pdMS_TO_TICKS(1000)) == pdTRUE)
+ * if (xTaskNotifyWait(0, UINT32_MAX, &notification_value, pdMS_TO_TICKS(1000)) == pdTRUE)
  * {
  *     if (notification_value & NETWORK_NOTIFY_READY)
  *         // Network is ready (link up + IP configured)
