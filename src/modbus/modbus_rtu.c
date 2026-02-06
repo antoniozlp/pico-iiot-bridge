@@ -76,42 +76,50 @@ static void modbus_rtu_on_error(void)
 }
 
 /**
- * @brief Initialize data points with test/demo data
+ * @brief Load data points configuration from flash
  * 
- * For testing: creates fake data points to read holding registers,
- * input registers, and coils from a Modbus server.
- * TODO: Replace this with config_get_modbus_rtu_client_config() when ready.
+ * Loads the Modbus RTU client configuration from flash storage, which includes
+ * all data point configurations. Initializes result structures to zero.
+ * 
+ * @return true if config loaded successfully, false on error
  */
-static void modbus_rtu_init_test_data_points(void)
+static bool modbus_rtu_load_data_points_from_config(void)
 {
-    memset(s_data_point_configs, 0, sizeof(s_data_point_configs));
+    modbus_rtu_client_config_t client_config;
+    
+    // Load configuration from flash
+    if (!config_get_modbus_rtu_client_config(&client_config))
+    {
+        LOG_ERROR("Failed to load Modbus RTU client configuration from flash");
+        return false;
+    }
+    
+    // Copy data points from config to runtime arrays
+    memcpy(s_data_point_configs, client_config.data_points, 
+           sizeof(modbus_rtu_data_point_config_t) * MODBUS_RTU_DATA_POINTS_MAX);
+    
+    // Initialize result structures to zero
     memset(s_data_point_results, 0, sizeof(s_data_point_results));
     
-    /* Data point 0: Read 2 holding registers from address 26 */
-    s_data_point_configs[0].enabled = true;
-    s_data_point_configs[0].slave_address = 1;
-    s_data_point_configs[0].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
-    s_data_point_configs[0].operation = MODBUS_OP_READ;
-    s_data_point_configs[0].start_address = 26;
-    s_data_point_configs[0].count = 2;
+    // Log enabled data points
+    uint8_t enabled_count = 0;
+    for (uint8_t i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+    {
+        if (s_data_point_configs[i].enabled)
+        {
+            enabled_count++;
+            LOG_INFO("Data point %u: slave=%u, type=%u, op=%u, addr=%u, count=%u",
+                     i,
+                     s_data_point_configs[i].slave_address,
+                     s_data_point_configs[i].data_type,
+                     s_data_point_configs[i].operation,
+                     s_data_point_configs[i].start_address,
+                     s_data_point_configs[i].count);
+        }
+    }
     
-    /* Data point 1: Read 3 coils from address 64 */
-    s_data_point_configs[1].enabled = true;
-    s_data_point_configs[1].slave_address = 1;
-    s_data_point_configs[1].data_type = MODBUS_DATA_TYPE_COIL;
-    s_data_point_configs[1].operation = MODBUS_OP_READ;
-    s_data_point_configs[1].start_address = 64;
-    s_data_point_configs[1].count = 3;
-    
-    /* Data point 2: Read 2 input registers from address 10 */
-    s_data_point_configs[2].enabled = true;
-    s_data_point_configs[2].slave_address = 1;
-    s_data_point_configs[2].data_type = MODBUS_DATA_TYPE_INPUT_REGISTER;
-    s_data_point_configs[2].operation = MODBUS_OP_READ;
-    s_data_point_configs[2].start_address = 10;
-    s_data_point_configs[2].count = 2;
-    
-    LOG_INFO("Modbus RTU: initialized test data points with %d items", 3);
+    LOG_INFO("Modbus RTU: loaded %u enabled data points from configuration", enabled_count);
+    return true;
 }
 
 /**
@@ -360,8 +368,15 @@ static void vModbusRtuTask(void *pvParameters)
         return;
     }
 
-    /* Initialize test data points with demo data */
-    modbus_rtu_init_test_data_points();
+    /* Load data points configuration from flash */
+    if (!modbus_rtu_load_data_points_from_config())
+    {
+        LOG_ERROR("Failed to load data points from configuration - task will exit");
+        vSemaphoreDelete(s_data_point_mutex);
+        s_data_point_mutex = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
 
     /* Create and configure nanoMODBUS client */
     nmbs_platform_conf platform_conf;
