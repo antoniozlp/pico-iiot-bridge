@@ -23,6 +23,7 @@
 #include "pico_flash_storage.h"
 #include "serial_to_tcp.h"
 #include "system_config.h"
+#include "modbus_rtu.h"
 
 /**
  * @brief Application entry point
@@ -90,6 +91,12 @@ int main(void)
     if (!serial_to_tcp_task_init())
     {
         LOG_ERROR("Failed to initialize Serial-to-TCP task");
+        return 1;
+    }
+
+    if (!modbus_rtu_task_init())
+    {
+        LOG_ERROR("Failed to initialize Modbus task");
         return 1;
     }
 
