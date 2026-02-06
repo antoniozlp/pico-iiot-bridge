@@ -437,7 +437,11 @@ bool config_set_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_
     {
         return false;
     }
-    memcpy(&g_sys_cfg.modbus_rtu_client, modbus_rtu_client_config, sizeof(modbus_rtu_client_config_t));
-    g_config_changed = true;
+    
+    if (memcmp(&g_sys_cfg.modbus_rtu_client, modbus_rtu_client_config, sizeof(modbus_rtu_client_config_t)) != 0)
+    {
+        memcpy(&g_sys_cfg.modbus_rtu_client, modbus_rtu_client_config, sizeof(modbus_rtu_client_config_t));
+        g_config_changed = true;
+    }
     return true;
 }
