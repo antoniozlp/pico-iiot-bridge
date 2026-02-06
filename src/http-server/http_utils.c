@@ -422,6 +422,186 @@ static uint8_t handle_set_s2tcp(uint8_t * uri)
 	return changed ? HTTP_OK : HTTP_FAILED;
 }
 
+/**
+ * @brief Handle Modbus RTU client configuration update from CGI
+ * 
+ * Processes set_modbus_client.cgi POST request with parameters:
+ * enable, serial_id
+ * 
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
+static uint8_t handle_set_modbus_client(uint8_t * uri)
+{
+	uint8_t changed = 0;
+	uint8_t * param;
+	modbus_rtu_client_config_t client_config;
+	
+	// Get current Modbus RTU client configuration
+	if (!config_get_modbus_rtu_client_config(&client_config))
+	{
+		LOG_ERROR("Failed to get Modbus RTU client config");
+		return HTTP_FAILED;
+	}
+
+	if((param = get_http_param_value((char *)uri, "enable")))
+	{
+		int val = ATOI(param, 10);
+		client_config.enable = (val != 0);
+		changed = 1;
+	}
+
+	if((param = get_http_param_value((char *)uri, "serial_id")))
+	{
+		int val = ATOI(param, 10);
+		if (val == 0 || val == 1)
+		{
+			client_config.serial_id = (uint8_t)val;
+			changed = 1;
+		}
+	}
+
+	if(changed)
+	{
+		if (!config_set_modbus_rtu_client_config(&client_config))
+		{
+			LOG_ERROR("Failed to set Modbus RTU client config");
+			return HTTP_FAILED;
+		}
+		
+		LOG_INFO("Modbus RTU client config updated: enable=%d, serial_id=%d",
+			   client_config.enable, client_config.serial_id);
+
+		if (!config_save_to_flash())
+		{
+			LOG_ERROR("Failed to save config to flash");
+			return HTTP_FAILED;
+		}
+	}
+
+	return changed ? HTTP_OK : HTTP_FAILED;
+}
+
+/**
+ * @brief Handle Modbus RTU data point configuration update from CGI
+ * 
+ * Processes set_modbus_datapoint.cgi POST request with parameters:
+ * dp_idx, enabled, slave_address, data_type, operation, start_address, count
+ * 
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
+static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
+{
+	uint8_t changed = 0;
+	uint8_t * param;
+	modbus_rtu_client_config_t client_config;
+	int dp_idx = -1;
+	
+	// Get data point index
+	if((param = get_http_param_value((char *)uri, "dp_idx")))
+	{
+		dp_idx = ATOI(param, 10);
+		if (dp_idx < 0 || dp_idx >= MODBUS_RTU_DATA_POINTS_MAX)
+		{
+			LOG_ERROR("Invalid data point index %d", dp_idx);
+			return HTTP_FAILED;
+		}
+	}
+	else
+	{
+		LOG_ERROR("Missing dp_idx parameter");
+		return HTTP_FAILED;
+	}
+	
+	// Get current Modbus RTU configuration
+	if (!config_get_modbus_rtu_client_config(&client_config))
+	{
+		LOG_ERROR("Failed to get Modbus RTU client config");
+		return HTTP_FAILED;
+	}
+
+	modbus_rtu_data_point_config_t *dp = &client_config.data_points[dp_idx];
+
+	if((param = get_http_param_value((char *)uri, "enabled")))
+	{
+		int val = ATOI(param, 10);
+		dp->enabled = (val != 0);
+		changed = 1;
+	}
+
+	if((param = get_http_param_value((char *)uri, "slave_address")))
+	{
+		int val = ATOI(param, 10);
+		if (val >= 1 && val <= 247)
+		{
+			dp->slave_address = (uint8_t)val;
+			changed = 1;
+		}
+	}
+
+	if((param = get_http_param_value((char *)uri, "data_type")))
+	{
+		int val = ATOI(param, 10);
+		if (val >= 0 && val <= 3)
+		{
+			dp->data_type = (modbus_rtu_data_type_t)val;
+			changed = 1;
+		}
+	}
+
+	if((param = get_http_param_value((char *)uri, "operation")))
+	{
+		int val = ATOI(param, 10);
+		if (val == 0 || val == 1)
+		{
+			dp->operation = (modbus_rtu_operation_t)val;
+			changed = 1;
+		}
+	}
+
+	if((param = get_http_param_value((char *)uri, "start_address")))
+	{
+		int val = ATOI(param, 10);
+		if (val >= 0 && val <= 65535)
+		{
+			dp->start_address = (uint16_t)val;
+			changed = 1;
+		}
+	}
+
+	if((param = get_http_param_value((char *)uri, "count")))
+	{
+		int val = ATOI(param, 10);
+		if (val >= 1 && val <= MODBUS_RTU_MAX_REG_COUNT)
+		{
+			dp->count = (uint16_t)val;
+			changed = 1;
+		}
+	}
+
+	if(changed)
+	{
+		if (!config_set_modbus_rtu_client_config(&client_config))
+		{
+			LOG_ERROR("Failed to set Modbus RTU client config");
+			return HTTP_FAILED;
+		}
+		
+		LOG_INFO("Modbus RTU data point %d updated: enabled=%d, slave=%d, type=%d, op=%d, addr=%d, count=%d",
+			   dp_idx, dp->enabled, dp->slave_address, dp->data_type,
+			   dp->operation, dp->start_address, dp->count);
+
+		if (!config_save_to_flash())
+		{
+			LOG_ERROR("Failed to save config to flash");
+			return HTTP_FAILED;
+		}
+	}
+
+	return changed ? HTTP_OK : HTTP_FAILED;
+}
+
 uint8_t http_get_cgi_handler(uint8_t * uri_name, uint8_t * buf, uint32_t * file_len)
 {
 	uint8_t ret = HTTP_OK;
@@ -478,12 +658,14 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 		serial_config_t serial0_config;
 		serial_config_t serial1_config;
 		serial_to_tcp_mode_config_t s2tcp_config;
+		modbus_rtu_client_config_t modbus_config;
 		
 		// Get all configuration using the API
 		if (!config_get_net_info(&net_info) ||
 			!config_get_serial_config(0, &serial0_config) ||
 			!config_get_serial_config(1, &serial1_config) ||
-			!config_get_serial_to_tcp_mode(&s2tcp_config))
+			!config_get_serial_to_tcp_mode(&s2tcp_config) ||
+			!config_get_modbus_rtu_client_config(&modbus_config))
 		{
 			LOG_ERROR("Failed to get configuration");
 			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
@@ -496,11 +678,13 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 		const char *parity1_str = serial1_config.parity == UART_PARITY_NONE ? "none" :
 								  serial1_config.parity == UART_PARITY_EVEN ? "even" : "odd";
 		
+		// Build base JSON
 		*len = sprintf((char *)buf,
 					   "{\"net\":{\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"ip\":\"%d.%d.%d.%d\",\"sn\":\"%d.%d.%d.%d\",\"gw\":\"%d.%d.%d.%d\",\"dns\":\"%d.%d.%d.%d\",\"dhcp\":%d},"
 					   "\"serial0\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},"
 					   "\"serial1\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},"
-					   "\"s2tcp\":{\"enable\":%d,\"serial\":%u,\"mode\":%d,\"lport\":%u,\"timeout\":%u,\"keepalive\":%u,\"maxconn\":%u,\"remoteip\":\"%d.%d.%d.%d\",\"remoteport\":%u}}",
+					   "\"s2tcp\":{\"enable\":%d,\"serial\":%u,\"mode\":%d,\"lport\":%u,\"timeout\":%u,\"keepalive\":%u,\"maxconn\":%u,\"remoteip\":\"%d.%d.%d.%d\",\"remoteport\":%u},"
+					   "\"modbus\":{\"enable\":%d,\"serial_id\":%u,\"data_points\":[",
 					   net_info.mac[0], net_info.mac[1], net_info.mac[2], net_info.mac[3], net_info.mac[4], net_info.mac[5],
 					   net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
 					   net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3],
@@ -528,7 +712,26 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 					   (unsigned int)s2tcp_config.max_connections,
 					   s2tcp_config.remote_ip[0], s2tcp_config.remote_ip[1], 
 					   s2tcp_config.remote_ip[2], s2tcp_config.remote_ip[3],
-					   (unsigned int)s2tcp_config.remote_port);
+					   (unsigned int)s2tcp_config.remote_port,
+					   modbus_config.enable ? 1 : 0,
+					   (unsigned int)modbus_config.serial_id);
+		
+		// Append data points array
+		for (int i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+		{
+			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u}",
+							i > 0 ? "," : "",
+							modbus_config.data_points[i].enabled ? 1 : 0,
+							(unsigned int)modbus_config.data_points[i].slave_address,
+							modbus_config.data_points[i].data_type,
+							modbus_config.data_points[i].operation,
+							(unsigned int)modbus_config.data_points[i].start_address,
+							(unsigned int)modbus_config.data_points[i].count);
+		}
+		
+		// Close JSON
+		*len += sprintf((char *)buf + *len, "]}}");
+		
 		return HTTP_OK;
 	}
 
@@ -554,6 +757,20 @@ uint8_t predefined_set_cgi_processor(uint8_t * uri_name, uint8_t * uri, uint8_t 
 	if(strcmp((const char *)uri_name, "set_s2tcp.cgi") == 0)
 	{
 		uint8_t handled = handle_set_s2tcp(uri);
+		*en = sprintf((char *)buf, "%d", handled == HTTP_OK);
+		return handled;
+	}
+
+	if(strcmp((const char *)uri_name, "set_modbus_client.cgi") == 0)
+	{
+		uint8_t handled = handle_set_modbus_client(uri);
+		*en = sprintf((char *)buf, "%d", handled == HTTP_OK);
+		return handled;
+	}
+
+	if(strcmp((const char *)uri_name, "set_modbus_datapoint.cgi") == 0)
+	{
+		uint8_t handled = handle_set_modbus_datapoint(uri);
 		*en = sprintf((char *)buf, "%d", handled == HTTP_OK);
 		return handled;
 	}
