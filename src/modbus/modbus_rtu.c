@@ -32,58 +32,34 @@
 /* nanoMODBUS timeouts (ms) */
 #define MODBUS_RTU_READ_TIMEOUT_MS  1000
 #define MODBUS_RTU_BYTE_TIMEOUT_MS 100
+#define MODBUS_RTU_READ_DELAY_MS 1 // Avoid blocking the task if the timeout is not reached and the still data to read
 
 /* Enable flag: modbus_rtu_client_config_t.enable */
 #define MODBUS_RTU_DISABLED         0
 
-/* Polling list configuration */
-#define MODBUS_RTU_POLL_LIST_SIZE   10   /* Maximum number of items to poll */
-#define MODBUS_RTU_MAX_REG_COUNT    10   /* Max registers/coils per request */
+/* Note: modbus_rtu_data_point_config_t, enums, and constants are defined in system_config.h */
 
 /**
- * @brief Modbus data types (register and coil types)
- */
-typedef enum {
-    MODBUS_DATA_TYPE_COIL = 0,              /* Discrete output coils (read/write, 1 bit) */
-    MODBUS_DATA_TYPE_DISCRETE_INPUT = 1,    /* Discrete inputs (read-only, 1 bit) */
-    MODBUS_DATA_TYPE_INPUT_REGISTER = 2,    /* Input registers (read-only, 16 bit) */
-    MODBUS_DATA_TYPE_HOLDING_REGISTER = 3   /* Holding registers (read/write, 16 bit) */
-} modbus_rtu_data_type_t;
-
-/**
- * @brief Modbus operation type
- */
-typedef enum {
-    MODBUS_OP_READ = 0,
-    MODBUS_OP_WRITE = 1
-} modbus_rtu_operation_t;
-
-/**
- * @brief Modbus RTU polling item
+ * @brief Modbus RTU data point result (runtime only, not stored)
  * 
- * Defines a Modbus register/coil to poll periodically. Results are stored
- * in the same structure after each poll cycle.
+ * Contains the result of the last read/write operation for a data point.
+ * This data lives in RAM and is updated after each poll cycle.
  */
 typedef struct {
-    uint8_t enabled;                        /* Enable/disable this poll item */
-    uint8_t slave_address;                  /* Modbus slave address (1-247) */
-    modbus_rtu_data_type_t data_type;       /* Type of data to read/write */
-    modbus_rtu_operation_t operation;       /* Read or write */
-    uint16_t start_address;                 /* Starting register/coil address */
-    uint16_t count;                         /* Number of registers/coils (1-MODBUS_RTU_MAX_REG_COUNT) */
-    
-    /* Result data */
     nmbs_error last_error;                  /* Last operation error code */
     uint32_t last_poll_time_ms;             /* Timestamp of last poll (for diagnostics) */
     union {
         uint16_t registers[MODBUS_RTU_MAX_REG_COUNT];  /* For holding/input registers */
         uint8_t coils[MODBUS_RTU_MAX_REG_COUNT];       /* For coils/discrete inputs (0 or 1) */
     } data;
-} modbus_rtu_poll_item_t;
+} modbus_rtu_data_point_result_t;
 
-/* Polling list: array of items to poll periodically */
-static modbus_rtu_poll_item_t s_poll_list[MODBUS_RTU_POLL_LIST_SIZE];
-static SemaphoreHandle_t s_poll_list_mutex = NULL;
+/* Data point configuration (loaded from flash at startup) */
+static modbus_rtu_data_point_config_t s_data_point_configs[MODBUS_RTU_DATA_POINTS_MAX];
+/* Data point results (runtime data, updated each cycle) */
+static modbus_rtu_data_point_result_t s_data_point_results[MODBUS_RTU_DATA_POINTS_MAX];
+/* Mutex to protect access to configs and results */
+static SemaphoreHandle_t s_data_point_mutex = NULL;
 
 
 /* UART instance used by transport callbacks (set before task runs) */
@@ -100,78 +76,83 @@ static void modbus_rtu_on_error(void)
 }
 
 /**
- * @brief Initialize polling list with test/demo data
+ * @brief Initialize data points with test/demo data
  * 
- * For testing: creates fake poll items to read holding registers,
+ * For testing: creates fake data points to read holding registers,
  * input registers, and coils from a Modbus server.
+ * TODO: Replace this with config_get_modbus_rtu_client_config() when ready.
  */
-static void modbus_rtu_init_test_poll_list(void)
+static void modbus_rtu_init_test_data_points(void)
 {
-    memset(s_poll_list, 0, sizeof(s_poll_list));
+    memset(s_data_point_configs, 0, sizeof(s_data_point_configs));
+    memset(s_data_point_results, 0, sizeof(s_data_point_results));
     
-    /* Poll item 0: Read 2 holding registers from address 26 */
-    s_poll_list[0].enabled = true;
-    s_poll_list[0].slave_address = 1;
-    s_poll_list[0].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
-    s_poll_list[0].operation = MODBUS_OP_READ;
-    s_poll_list[0].start_address = 26;
-    s_poll_list[0].count = 2;
+    /* Data point 0: Read 2 holding registers from address 26 */
+    s_data_point_configs[0].enabled = true;
+    s_data_point_configs[0].slave_address = 1;
+    s_data_point_configs[0].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+    s_data_point_configs[0].operation = MODBUS_OP_READ;
+    s_data_point_configs[0].start_address = 26;
+    s_data_point_configs[0].count = 2;
     
-    /* Poll item 1: Read 3 coils from address 64 */
-    s_poll_list[1].enabled = true;
-    s_poll_list[1].slave_address = 1;
-    s_poll_list[1].data_type = MODBUS_DATA_TYPE_COIL;
-    s_poll_list[1].operation = MODBUS_OP_READ;
-    s_poll_list[1].start_address = 64;
-    s_poll_list[1].count = 3;
+    /* Data point 1: Read 3 coils from address 64 */
+    s_data_point_configs[1].enabled = true;
+    s_data_point_configs[1].slave_address = 1;
+    s_data_point_configs[1].data_type = MODBUS_DATA_TYPE_COIL;
+    s_data_point_configs[1].operation = MODBUS_OP_READ;
+    s_data_point_configs[1].start_address = 64;
+    s_data_point_configs[1].count = 3;
     
-    /* Poll item 2: Read 2 input registers from address 10 */
-    s_poll_list[2].enabled = true;
-    s_poll_list[2].slave_address = 1;
-    s_poll_list[2].data_type = MODBUS_DATA_TYPE_INPUT_REGISTER;
-    s_poll_list[2].operation = MODBUS_OP_READ;
-    s_poll_list[2].start_address = 10;
-    s_poll_list[2].count = 2;
+    /* Data point 2: Read 2 input registers from address 10 */
+    s_data_point_configs[2].enabled = true;
+    s_data_point_configs[2].slave_address = 1;
+    s_data_point_configs[2].data_type = MODBUS_DATA_TYPE_INPUT_REGISTER;
+    s_data_point_configs[2].operation = MODBUS_OP_READ;
+    s_data_point_configs[2].start_address = 10;
+    s_data_point_configs[2].count = 2;
     
-    LOG_INFO("Modbus RTU: initialized test poll list with %d items", 3);
+    LOG_INFO("Modbus RTU: initialized test data points with %d items", 3);
 }
 
 /**
- * @brief Process a single poll item
+ * @brief Process a single data point
  * 
  * Reads or writes the specified Modbus registers/coils and stores the result
- * in the poll item structure.
+ * in the data point result structure.
  * 
  * @param nmbs      Pointer to nanoMODBUS client instance
- * @param item      Pointer to poll item to process
+ * @param config    Pointer to data point configuration (what to read/write)
+ * @param result    Pointer to data point result (where to store data)
  */
-static void modbus_rtu_process_poll_item(nmbs_t *nmbs, modbus_rtu_poll_item_t *item)
+static void modbus_rtu_process_data_point(nmbs_t *nmbs, 
+                                          const modbus_rtu_data_point_config_t *config,
+                                          modbus_rtu_data_point_result_t *result)
 {
-    if (nmbs == NULL || item == NULL || !item->enabled)
+    if (nmbs == NULL || config == NULL || result == NULL || !config->enabled)
     {
         return;
     }
     
     /* Set destination address for this item */
-    nmbs_set_destination_rtu_address(nmbs, item->slave_address);
+    nmbs_set_destination_rtu_address(nmbs, config->slave_address);
     
     nmbs_error err = NMBS_ERROR_NONE;
     
     /* Process based on data type and operation */
-    if (item->operation == MODBUS_OP_READ)
+    if (config->operation == MODBUS_OP_READ)
     {
-        switch (item->data_type)
+        switch (config->data_type)
         {
             case MODBUS_DATA_TYPE_COIL:
             {
                 /* Read coils into bitfield, then convert to byte array */
                 nmbs_bitfield coils = {0};
-                err = nmbs_read_coils(nmbs, item->start_address, item->count, coils);
+                err = nmbs_read_coils(nmbs, config->start_address, config->count, coils);
                 if (err == NMBS_ERROR_NONE)
                 {
-                    for (uint16_t i = 0; i < item->count && i < MODBUS_RTU_MAX_REG_COUNT; i++)
+                    for (uint16_t i = 0; i < config->count && i < MODBUS_RTU_MAX_REG_COUNT; i++)
                     {
-                        item->data.coils[i] = nmbs_bitfield_read(coils, i) ? 1 : 0;
+                        result->data.coils[i] = nmbs_bitfield_read(coils, i) ? 1 : 0;
                     }
                 }
                 break;
@@ -180,12 +161,12 @@ static void modbus_rtu_process_poll_item(nmbs_t *nmbs, modbus_rtu_poll_item_t *i
             case MODBUS_DATA_TYPE_DISCRETE_INPUT:
             {
                 nmbs_bitfield inputs = {0};
-                err = nmbs_read_discrete_inputs(nmbs, item->start_address, item->count, inputs);
+                err = nmbs_read_discrete_inputs(nmbs, config->start_address, config->count, inputs);
                 if (err == NMBS_ERROR_NONE)
                 {
-                    for (uint16_t i = 0; i < item->count && i < MODBUS_RTU_MAX_REG_COUNT; i++)
+                    for (uint16_t i = 0; i < config->count && i < MODBUS_RTU_MAX_REG_COUNT; i++)
                     {
-                        item->data.coils[i] = nmbs_bitfield_read(inputs, i) ? 1 : 0;
+                        result->data.coils[i] = nmbs_bitfield_read(inputs, i) ? 1 : 0;
                     }
                 }
                 break;
@@ -193,15 +174,15 @@ static void modbus_rtu_process_poll_item(nmbs_t *nmbs, modbus_rtu_poll_item_t *i
             
             case MODBUS_DATA_TYPE_INPUT_REGISTER:
             {
-                err = nmbs_read_input_registers(nmbs, item->start_address, 
-                                               item->count, item->data.registers);
+                err = nmbs_read_input_registers(nmbs, config->start_address, 
+                                               config->count, result->data.registers);
                 break;
             }
             
             case MODBUS_DATA_TYPE_HOLDING_REGISTER:
             {
-                err = nmbs_read_holding_registers(nmbs, item->start_address,
-                                                 item->count, item->data.registers);
+                err = nmbs_read_holding_registers(nmbs, config->start_address,
+                                                 config->count, result->data.registers);
                 break;
             }
             
@@ -212,24 +193,24 @@ static void modbus_rtu_process_poll_item(nmbs_t *nmbs, modbus_rtu_poll_item_t *i
     }
     else  /* MODBUS_OP_WRITE */
     {
-        /* Write operations (for future implementation) */
-        switch (item->data_type)
+        /* Write operations - data comes from result structure (set by user/web UI) */
+        switch (config->data_type)
         {
             case MODBUS_DATA_TYPE_COIL:
             {
                 nmbs_bitfield coils = {0};
-                for (uint16_t i = 0; i < item->count && i < MODBUS_RTU_MAX_REG_COUNT; i++)
+                for (uint16_t i = 0; i < config->count && i < MODBUS_RTU_MAX_REG_COUNT; i++)
                 {
-                    nmbs_bitfield_write(coils, i, item->data.coils[i]);
+                    nmbs_bitfield_write(coils, i, result->data.coils[i]);
                 }
-                err = nmbs_write_multiple_coils(nmbs, item->start_address, item->count, coils);
+                err = nmbs_write_multiple_coils(nmbs, config->start_address, config->count, coils);
                 break;
             }
             
             case MODBUS_DATA_TYPE_HOLDING_REGISTER:
             {
-                err = nmbs_write_multiple_registers(nmbs, item->start_address,
-                                                   item->count, item->data.registers);
+                err = nmbs_write_multiple_registers(nmbs, config->start_address,
+                                                   config->count, result->data.registers);
                 break;
             }
             
@@ -246,15 +227,15 @@ static void modbus_rtu_process_poll_item(nmbs_t *nmbs, modbus_rtu_poll_item_t *i
         }
     }
     
-    /* Store result */
-    item->last_error = err;
-    item->last_poll_time_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    /* Store result metadata */
+    result->last_error = err;
+    result->last_poll_time_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
     
     if (err != NMBS_ERROR_NONE)
     {
         LOG_DEBUG("Modbus %s failed: slave=%u addr=%u count=%u err=%d",
-                 item->operation == MODBUS_OP_READ ? "read" : "write",
-                 item->slave_address, item->start_address, item->count, err);
+                 config->operation == MODBUS_OP_READ ? "read" : "write",
+                 config->slave_address, config->start_address, config->count, err);
     }
 }
 
@@ -287,6 +268,12 @@ static int32_t modbus_rtu_read_serial(uint8_t *buf, uint16_t count,
         {
             buf[bytes_read++] = uart_getc(s_modbus_rtu_uart);
             start_time = time_us_64();
+        }
+        else if (byte_timeout_ms >= MODBUS_RTU_READ_TIMEOUT_MS)
+        {
+            // Avoid blocking the task if the timeout is not reached and the still data to read
+            // MODBUS_RTU_READ_TIMEOUT_MS (1000ms) - Waiting for slave to START responding (long wait)
+            vTaskDelay(pdMS_TO_TICKS(MODBUS_RTU_READ_DELAY_MS));
         }
     }
 
@@ -364,17 +351,17 @@ static void vModbusRtuTask(void *pvParameters)
              serial_config.databits,
              serial_config.stopbits);
 
-    /* Create mutex for poll list access */
-    s_poll_list_mutex = xSemaphoreCreateMutex();
-    if (s_poll_list_mutex == NULL)
+    /* Create mutex for data point access */
+    s_data_point_mutex = xSemaphoreCreateMutex();
+    if (s_data_point_mutex == NULL)
     {
-        LOG_ERROR("Failed to create poll list mutex - task will exit");
+        LOG_ERROR("Failed to create data point mutex - task will exit");
         vTaskDelete(NULL);
         return;
     }
 
-    /* Initialize test poll list with demo data */
-    modbus_rtu_init_test_poll_list();
+    /* Initialize test data points with demo data */
+    modbus_rtu_init_test_data_points();
 
     /* Create and configure nanoMODBUS client */
     nmbs_platform_conf platform_conf;
@@ -389,8 +376,8 @@ static void vModbusRtuTask(void *pvParameters)
     {
         LOG_ERROR("Failed to create Modbus client: %d - task will exit", err);
         modbus_rtu_on_error();
-        vSemaphoreDelete(s_poll_list_mutex);
-        s_poll_list_mutex = NULL;
+        vSemaphoreDelete(s_data_point_mutex);
+        s_data_point_mutex = NULL;
         vTaskDelete(NULL);
         return;
     }
@@ -398,54 +385,61 @@ static void vModbusRtuTask(void *pvParameters)
     nmbs_set_read_timeout(&nmbs, MODBUS_RTU_READ_TIMEOUT_MS);
     nmbs_set_byte_timeout(&nmbs, MODBUS_RTU_BYTE_TIMEOUT_MS);
 
-    LOG_INFO("Modbus RTU client ready, starting poll loop");
+    LOG_INFO("Modbus RTU client ready, starting data point processing loop");
 
-    /* Main polling loop */
+    /* Main data point processing loop */
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(MODBUS_RTU_TASK_LOOP_DELAY_MS));
 
-        /* Take mutex to access poll list */
-        if (xSemaphoreTake(s_poll_list_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+        /* Take mutex to access data points */
+        if (xSemaphoreTake(s_data_point_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
         {
-            LOG_WARN("Failed to take poll list mutex");
+            LOG_WARN("Failed to take data point mutex");
             continue;
         }
 
-        /* Process all enabled poll items */
-        for (uint8_t i = 0; i < MODBUS_RTU_POLL_LIST_SIZE; i++)
+        /* Process all enabled data points */
+        for (uint8_t i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
         {
-            if (s_poll_list[i].enabled)
+            if (s_data_point_configs[i].enabled)
             {
-                modbus_rtu_process_poll_item(&nmbs, &s_poll_list[i]);
+                modbus_rtu_process_data_point(&nmbs, &s_data_point_configs[i], &s_data_point_results[i]);
                 
                 /* Log successful reads for debugging */
-                if (s_poll_list[i].last_error == NMBS_ERROR_NONE && 
-                    s_poll_list[i].operation == MODBUS_OP_READ)
+                if (s_data_point_results[i].last_error == NMBS_ERROR_NONE && 
+                    s_data_point_configs[i].operation == MODBUS_OP_READ)
                 {
-                    if (s_poll_list[i].data_type == MODBUS_DATA_TYPE_HOLDING_REGISTER ||
-                        s_poll_list[i].data_type == MODBUS_DATA_TYPE_INPUT_REGISTER)
+                    if (s_data_point_configs[i].data_type == MODBUS_DATA_TYPE_HOLDING_REGISTER ||
+                        s_data_point_configs[i].data_type == MODBUS_DATA_TYPE_INPUT_REGISTER)
                     {
-                        LOG_DEBUG("Poll[%u]: slave=%u addr=%u regs=[%u, %u]", 
-                                 i, s_poll_list[i].slave_address, 
-                                 s_poll_list[i].start_address,
-                                 s_poll_list[i].data.registers[0],
-                                 s_poll_list[i].count > 1 ? s_poll_list[i].data.registers[1] : 0);
+                        LOG_DEBUG("DataPoint[%u]: slave=%u addr=%u regs=[%u, %u]", 
+                                 i, s_data_point_configs[i].slave_address, 
+                                 s_data_point_configs[i].start_address,
+                                 s_data_point_results[i].data.registers[0],
+                                 s_data_point_configs[i].count > 1 ? s_data_point_results[i].data.registers[1] : 0);
                     }
                     else
                     {
-                        LOG_DEBUG("Poll[%u]: slave=%u addr=%u coils=[%u, %u, %u]",
-                                 i, s_poll_list[i].slave_address,
-                                 s_poll_list[i].start_address,
-                                 s_poll_list[i].data.coils[0],
-                                 s_poll_list[i].count > 1 ? s_poll_list[i].data.coils[1] : 0,
-                                 s_poll_list[i].count > 2 ? s_poll_list[i].data.coils[2] : 0);
+                        LOG_DEBUG("DataPoint[%u]: slave=%u addr=%u coils=[%u, %u, %u]",
+                                 i, s_data_point_configs[i].slave_address,
+                                 s_data_point_configs[i].start_address,
+                                 s_data_point_results[i].data.coils[0],
+                                 s_data_point_configs[i].count > 1 ? s_data_point_results[i].data.coils[1] : 0,
+                                 s_data_point_configs[i].count > 2 ? s_data_point_results[i].data.coils[2] : 0);
                     }
+                }
+                else
+                {
+                    LOG_ERROR("DataPoint[%u]: slave=%u addr=%u error=%d",
+                             i, s_data_point_configs[i].slave_address,
+                             s_data_point_configs[i].start_address,
+                             s_data_point_results[i].last_error);
                 }
             }
         }
 
-        xSemaphoreGive(s_poll_list_mutex);
+        xSemaphoreGive(s_data_point_mutex);
     }
 }
 

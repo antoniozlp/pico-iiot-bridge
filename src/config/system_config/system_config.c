@@ -31,6 +31,7 @@ bool g_config_changed = false;  // True if configuration has been changed since 
  * - Network: Static IP 192.168.11.3
  * - Serial ports: 115200 baud, 8N1
  * - Serial-to-TCP: Disabled
+ * - Modbus RTU: Disabled with 4 example data points configured
  * - Logger: INFO level with timestamps
  */
 void config_set_default(void)
@@ -93,6 +94,55 @@ void config_set_default(void)
     uint8_t default_remote_ip[4] = {192, 168, 11, 100};
     memcpy(g_sys_cfg.serial_to_tcp_mode.remote_ip, default_remote_ip, 4);
     g_sys_cfg.serial_to_tcp_mode.remote_port = 5001;
+
+    // Modbus RTU client defaults
+    g_sys_cfg.modbus_rtu_client.enable = 0;  // Disabled by default (changed from 1)
+    g_sys_cfg.modbus_rtu_client.serial_id = 1;  // Use UART1 by default
+    
+    // Initialize all data points to disabled
+    for (uint8_t i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+    {
+        g_sys_cfg.modbus_rtu_client.data_points[i].enabled = 0;
+        g_sys_cfg.modbus_rtu_client.data_points[i].slave_address = 1;
+        g_sys_cfg.modbus_rtu_client.data_points[i].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+        g_sys_cfg.modbus_rtu_client.data_points[i].operation = MODBUS_OP_READ;
+        g_sys_cfg.modbus_rtu_client.data_points[i].start_address = 0;
+        g_sys_cfg.modbus_rtu_client.data_points[i].count = 1;
+    }
+    
+    // // Data point 0: Read 4 holding registers from address 0 (common PLC data)
+    // g_sys_cfg.modbus_rtu_client.data_points[0].enabled = 0;  // Disabled until configured
+    // g_sys_cfg.modbus_rtu_client.data_points[0].slave_address = 1;
+    // g_sys_cfg.modbus_rtu_client.data_points[0].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+    // g_sys_cfg.modbus_rtu_client.data_points[0].operation = MODBUS_OP_READ;
+    // g_sys_cfg.modbus_rtu_client.data_points[0].start_address = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[0].count = 4;
+    
+    // // Data point 1: Read 8 coils from address 0 (digital outputs status)
+    // g_sys_cfg.modbus_rtu_client.data_points[1].enabled = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[1].slave_address = 1;
+    // g_sys_cfg.modbus_rtu_client.data_points[1].data_type = MODBUS_DATA_TYPE_COIL;
+    // g_sys_cfg.modbus_rtu_client.data_points[1].operation = MODBUS_OP_READ;
+    // g_sys_cfg.modbus_rtu_client.data_points[1].start_address = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[1].count = 8;
+    
+    // // Data point 2: Read 4 input registers from address 0 (analog sensors)
+    // g_sys_cfg.modbus_rtu_client.data_points[2].enabled = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[2].slave_address = 1;
+    // g_sys_cfg.modbus_rtu_client.data_points[2].data_type = MODBUS_DATA_TYPE_INPUT_REGISTER;
+    // g_sys_cfg.modbus_rtu_client.data_points[2].operation = MODBUS_OP_READ;
+    // g_sys_cfg.modbus_rtu_client.data_points[2].start_address = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[2].count = 4;
+    
+    // // Data point 3: Read 8 discrete inputs from address 0 (digital inputs status)
+    // g_sys_cfg.modbus_rtu_client.data_points[3].enabled = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[3].slave_address = 1;
+    // g_sys_cfg.modbus_rtu_client.data_points[3].data_type = MODBUS_DATA_TYPE_DISCRETE_INPUT;
+    // g_sys_cfg.modbus_rtu_client.data_points[3].operation = MODBUS_OP_READ;
+    // g_sys_cfg.modbus_rtu_client.data_points[3].start_address = 0;
+    // g_sys_cfg.modbus_rtu_client.data_points[3].count = 8;
+    
+    // // Remaining data points (4-9) are initialized to disabled with default values above
 }
 
 /**
@@ -353,5 +403,41 @@ bool config_set_net_info(wiz_NetInfo *net_info)
         memcpy(&g_sys_cfg.net_info, net_info, sizeof(wiz_NetInfo));
         g_config_changed = true;
     }
+    return true;
+}
+
+
+/**
+ * @brief Get Modbus RTU client configuration
+ * 
+ * @param modbus_rtu_client_config Pointer to modbus_rtu_client_config structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_get_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_client_config)
+{
+    if (modbus_rtu_client_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(modbus_rtu_client_config, &g_sys_cfg.modbus_rtu_client, sizeof(modbus_rtu_client_config_t));
+    return true;
+}
+
+/**
+ * @brief Set Modbus RTU client configuration
+ * 
+ * Updates Modbus RTU client configuration and marks config as changed if values differ.
+ * 
+ * @param modbus_rtu_client_config Pointer to modbus_rtu_client_config structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_set_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_client_config)
+{
+    if (modbus_rtu_client_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(&g_sys_cfg.modbus_rtu_client, modbus_rtu_client_config, sizeof(modbus_rtu_client_config_t));
+    g_config_changed = true;
     return true;
 }
