@@ -147,28 +147,30 @@ tag_handle_t tag_db_create(const char *name, tag_data_type_t data_type)
         return TAG_HANDLE_INVALID;
     }
     
-    // Check if we have space
-    if (s_tag_count >= TAG_DATABASE_MAX_TAGS)
-    {
-        LOG_ERROR("Tag database full (max=%d)", TAG_DATABASE_MAX_TAGS);
-        return TAG_HANDLE_INVALID;
-    }
-    
-    // Check for duplicate name
-    for (uint16_t i = 0; i < s_tag_count; i++)
-    {
-        if (strcmp(s_tags[i].name, name) == 0)
-        {
-            LOG_ERROR("Tag already exists: %s", name);
-            return TAG_HANDLE_INVALID;
-        }
-    }
-    
-    // Acquire mutex
+    // Acquire mutex first to prevent TOCTOU race condition
     if (xSemaphoreTake(s_tag_db_mutex, pdMS_TO_TICKS(TAG_DB_MUTEX_TIMEOUT_MS)) != pdTRUE)
     {
         LOG_ERROR("Failed to acquire mutex for tag creation");
         return TAG_HANDLE_INVALID;
+    }
+    
+    // Check if we have space (inside mutex)
+    if (s_tag_count >= TAG_DATABASE_MAX_TAGS)
+    {
+        xSemaphoreGive(s_tag_db_mutex);
+        LOG_ERROR("Tag database full (max=%d)", TAG_DATABASE_MAX_TAGS);
+        return TAG_HANDLE_INVALID;
+    }
+    
+    // Check for duplicate name (inside mutex)
+    for (uint16_t i = 0; i < s_tag_count; i++)
+    {
+        if (strcmp(s_tags[i].name, name) == 0)
+        {
+            xSemaphoreGive(s_tag_db_mutex);
+            LOG_ERROR("Tag already exists: %s", name);
+            return TAG_HANDLE_INVALID;
+        }
     }
     
     // Allocate tag
