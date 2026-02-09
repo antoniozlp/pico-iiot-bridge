@@ -143,6 +143,14 @@ void config_set_default(void)
     // g_sys_cfg.modbus_rtu_client.data_points[3].count = 8;
     
     // // Remaining data points (4-9) are initialized to disabled with default values above
+
+    // Tag database defaults
+    g_sys_cfg.tag_database.tag_count = 0;
+    g_sys_cfg.tag_database.auto_create_enabled = 1;  // Allow runtime creation
+    g_sys_cfg.tag_database.reserved = 0;
+    memset(g_sys_cfg.tag_database.tags, 0, sizeof(g_sys_cfg.tag_database.tags));
+    
+    LOG_INFO("Configuration set to defaults (including tag database)");
 }
 
 /**
@@ -160,27 +168,29 @@ bool config_load_from_flash(void)
     // Read directly from memory mapped flash
     const system_config_t *flash_config = (const system_config_t *)flash_target_contents;
 
+    // Check for exact version match
     if (flash_config->version.major == CONFIG_VERSION_MAJOR &&
         flash_config->version.minor == CONFIG_VERSION_MINOR &&
         flash_config->version.patch == CONFIG_VERSION_PATCH)
     {
         memcpy(&g_sys_cfg, flash_config, sizeof(system_config_t));
-        LOG_INFO("Configuration loaded from flash");
+        LOG_INFO("Configuration loaded from flash (version %d.%d.%d)",
+                 CONFIG_VERSION_MAJOR, CONFIG_VERSION_MINOR, CONFIG_VERSION_PATCH);
         g_config_changed = false;  // In-memory matches flash
         g_config_loaded = true;
         return true;
     }
-    else
-    {
-        LOG_WARN("No valid configuration found in flash");
-        LOG_WARN("Version: %d.%d.%d", flash_config->version.major, flash_config->version.minor, flash_config->version.patch);
-        LOG_WARN("Expected: %d.%d.%d", CONFIG_VERSION_MAJOR, CONFIG_VERSION_MINOR, CONFIG_VERSION_PATCH);
-        LOG_INFO("Loading defaults");
-        config_set_default();
-        g_config_changed = true;  // Defaults loaded, should be saved to flash
-        g_config_loaded = true;
-        return false;
-    }
+    
+    // Version mismatch - load defaults
+    LOG_WARN("Configuration version mismatch in flash");
+    LOG_WARN("Flash version: %d.%d.%d, Expected: %d.%d.%d", 
+             flash_config->version.major, flash_config->version.minor, flash_config->version.patch,
+             CONFIG_VERSION_MAJOR, CONFIG_VERSION_MINOR, CONFIG_VERSION_PATCH);
+    LOG_INFO("Loading default configuration");
+    config_set_default();
+    g_config_changed = true;  // Defaults loaded, should be saved to flash
+    g_config_loaded = true;
+    return false;
 }
 
 /**
@@ -444,4 +454,151 @@ bool config_set_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_
         g_config_changed = true;
     }
     return true;
+}
+
+// ============================================================================
+// Tag Database Configuration Functions
+// ============================================================================
+
+/**
+ * @brief Get tag database configuration from flash
+ * 
+ * @param tag_db_config Pointer to receive tag database config
+ * @return true if successful, false otherwise
+ */
+bool config_get_tag_database(tag_database_config_t *tag_db_config)
+{
+    if (tag_db_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    
+    memcpy(tag_db_config, &g_sys_cfg.tag_database, sizeof(tag_database_config_t));
+    return true;
+}
+
+/**
+ * @brief Set tag database configuration (marks for flash write)
+ * 
+ * @param tag_db_config Pointer to new tag database config
+ * @return true if successful, false otherwise
+ */
+bool config_set_tag_database(const tag_database_config_t *tag_db_config)
+{
+    if (tag_db_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    
+    // Only mark changed if actually different
+    if (memcmp(&g_sys_cfg.tag_database, tag_db_config, sizeof(tag_database_config_t)) != 0)
+    {
+        memcpy(&g_sys_cfg.tag_database, tag_db_config, sizeof(tag_database_config_t));
+        g_config_changed = true;
+    }
+    
+    return true;
+}
+
+/**
+ * @brief Add a single tag definition to config
+ * 
+ * Helper function to add one tag without managing the entire array.
+ * 
+ * @param name Tag name
+ * @param data_type Tag data type
+ * @return true if added, false if no space or duplicate name
+ */
+bool config_add_tag_definition(const char *name, uint8_t data_type)
+{
+    if (name == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    
+    // Check for duplicate
+    for (uint16_t i = 0; i < TAG_DB_MAX_PERSISTENT_TAGS; i++)
+    {
+        if (g_sys_cfg.tag_database.tags[i].enabled &&
+            strcmp(g_sys_cfg.tag_database.tags[i].name, name) == 0)
+        {
+            return false;  // Already exists
+        }
+    }
+    
+    // Find empty slot
+    for (uint16_t i = 0; i < TAG_DB_MAX_PERSISTENT_TAGS; i++)
+    {
+        if (!g_sys_cfg.tag_database.tags[i].enabled)
+        {
+            strncpy(g_sys_cfg.tag_database.tags[i].name, name, TAG_NAME_MAX_LEN - 1);
+            g_sys_cfg.tag_database.tags[i].name[TAG_NAME_MAX_LEN - 1] = '\0';
+            g_sys_cfg.tag_database.tags[i].data_type = data_type;
+            g_sys_cfg.tag_database.tags[i].enabled = 1;
+            memset(g_sys_cfg.tag_database.tags[i].reserved, 0, sizeof(g_sys_cfg.tag_database.tags[i].reserved));
+            
+            g_sys_cfg.tag_database.tag_count++;
+            g_config_changed = true;
+            return true;
+        }
+    }
+    
+    return false;  // No space
+}
+
+/**
+ * @brief Remove a tag definition from config
+ * 
+ * Marks tag slot as disabled rather than compacting array.
+ * 
+ * @param name Tag name to remove
+ * @return true if found and removed, false otherwise
+ */
+bool config_remove_tag_definition(const char *name)
+{
+    if (name == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    
+    for (uint16_t i = 0; i < TAG_DB_MAX_PERSISTENT_TAGS; i++)
+    {
+        if (g_sys_cfg.tag_database.tags[i].enabled &&
+            strcmp(g_sys_cfg.tag_database.tags[i].name, name) == 0)
+        {
+            g_sys_cfg.tag_database.tags[i].enabled = 0;
+            g_sys_cfg.tag_database.tag_count--;
+            g_config_changed = true;
+            return true;
+        }
+    }
+    
+    return false;  // Not found
+}
+
+/**
+ * @brief Get single tag definition by name
+ * 
+ * @param name Tag name
+ * @param def_out Pointer to receive tag definition
+ * @return true if found, false otherwise
+ */
+bool config_get_tag_definition(const char *name, tag_definition_t *def_out)
+{
+    if (name == NULL || def_out == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    
+    for (uint16_t i = 0; i < TAG_DB_MAX_PERSISTENT_TAGS; i++)
+    {
+        if (g_sys_cfg.tag_database.tags[i].enabled &&
+            strcmp(g_sys_cfg.tag_database.tags[i].name, name) == 0)
+        {
+            memcpy(def_out, &g_sys_cfg.tag_database.tags[i], sizeof(tag_definition_t));
+            return true;
+        }
+    }
+    
+    return false;  // Not found
 }

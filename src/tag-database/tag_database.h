@@ -30,12 +30,12 @@
 #include "queue.h"
 #include "semphr.h"
 
+// Import tag database constants from system_config.h
+#include "system_config.h"
+
 // ============================================================================
 // Configuration
 // ============================================================================
-
-#define TAG_NAME_MAX_LEN            16      // Tag name length (15 chars + null)
-#define TAG_DATABASE_MAX_TAGS       128     // Maximum number of tags
 
 // Queue configuration
 #define TAG_DB_QUEUE_LENGTH         32      // Pending write messages
@@ -46,19 +46,7 @@
 // Data Types
 // ============================================================================
 
-/**
- * @brief Tag data types
- */
-typedef enum {
-    TAG_TYPE_BOOL = 0,
-    TAG_TYPE_UINT8,
-    TAG_TYPE_UINT16,
-    TAG_TYPE_UINT32,
-    TAG_TYPE_INT16,
-    TAG_TYPE_INT32,
-    TAG_TYPE_FLOAT,
-    TAG_TYPE_COUNT
-} tag_data_type_t;
+// tag_data_type_t is defined in system_config.h
 
 /**
  * @brief Tag quality indicator (OPC UA / SCADA style)
@@ -136,6 +124,7 @@ bool tag_db_init(void);
  * 
  * Allocates a tag and assigns it a name and type.
  * Call during system initialization to define all tags.
+ * Note: This not persist the tag in flash, use tag_db_create_persistent().
  * 
  * @param name Tag name (max 15 chars + null terminator)
  * @param data_type Data type for this tag
@@ -223,5 +212,43 @@ bool tag_db_get_metadata(tag_handle_t handle, tag_metadata_t *metadata_out);
  * @return Count of tags created via tag_db_create()
  */
 uint16_t tag_db_get_tag_count(void);
+
+// ============================================================================
+// Persistence Functions
+// ============================================================================
+
+/**
+ * @brief Load tag definitions from flash and create tags
+ * 
+ * Reads tag_database_config_t from system config and creates
+ * all enabled tags in the runtime database.
+ * 
+ * Call after tag_db_init() and before other tasks start.
+ * 
+ * @return Number of tags created from flash
+ */
+uint16_t tag_db_load_from_flash(void);
+
+/**
+ * @brief Save current tag definitions to flash
+ * 
+ * Writes all currently defined tags to system config.
+ * Does NOT save tag values (only definitions).
+ * 
+ * @return true if successful, false otherwise
+ */
+bool tag_db_save_to_flash(void);
+
+/**
+ * @brief Create tag and optionally save to flash
+ * 
+ * Extended version of tag_db_create() that can persist the definition.
+ * 
+ * @param name Tag name
+ * @param data_type Tag data type
+ * @param persist If true, immediately saves to flash
+ * @return Tag handle or TAG_HANDLE_INVALID on error
+ */
+tag_handle_t tag_db_create_persistent(const char *name, tag_data_type_t data_type, bool persist);
 
 #endif // _TAG_DATABASE_H_

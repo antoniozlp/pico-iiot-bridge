@@ -6,6 +6,7 @@
 #include "tag_database.h"
 #include "logger.h"
 #include "semphr.h"
+#include "system_config.h"
 #include <string.h>
 
 #define TAG_DB_MUTEX_TIMEOUT_MS 100
@@ -140,7 +141,7 @@ bool tag_db_init(void)
 
 tag_handle_t tag_db_create(const char *name, tag_data_type_t data_type)
 {
-    if (name == NULL || data_type >= TAG_TYPE_COUNT)
+    if (name == NULL || data_type > TAG_TYPE_FLOAT)
     {
         LOG_ERROR("Invalid parameters for tag_db_create");
         return TAG_HANDLE_INVALID;
@@ -299,4 +300,117 @@ bool tag_db_get_metadata(tag_handle_t handle, tag_metadata_t *metadata_out)
 uint16_t tag_db_get_tag_count(void)
 {
     return s_tag_count;
+}
+
+// ============================================================================
+// Persistence Functions
+// ============================================================================
+
+/**
+ * @brief Load tag definitions from flash and create tags
+ */
+uint16_t tag_db_load_from_flash(void)
+{
+    tag_database_config_t config;
+    
+    if (!config_get_tag_database(&config))
+    {
+        LOG_ERROR("Failed to load tag database config from flash");
+        return 0;
+    }
+    
+    uint16_t created_count = 0;
+    
+    for (uint16_t i = 0; i < TAG_DB_MAX_PERSISTENT_TAGS; i++)
+    {
+        if (config.tags[i].enabled)
+        {
+            tag_data_type_t data_type = (tag_data_type_t)config.tags[i].data_type;
+            tag_handle_t handle = tag_db_create(config.tags[i].name, data_type);
+            
+            if (handle != TAG_HANDLE_INVALID)
+            {
+                created_count++;
+                LOG_DEBUG("Loaded tag from flash: %s (type=%d)", config.tags[i].name, data_type);
+            }
+            else
+            {
+                LOG_WARN("Failed to create tag from flash: %s", config.tags[i].name);
+            }
+        }
+    }
+    
+    LOG_INFO("Loaded %d tags from flash", created_count);
+    return created_count;
+}
+
+/**
+ * @brief Save current tag definitions to flash
+ */
+bool tag_db_save_to_flash(void)
+{
+    tag_database_config_t config;
+    memset(&config, 0, sizeof(config));
+    
+    config.tag_count = s_tag_count;
+    config.auto_create_enabled = 1;
+    config.reserved = 0;
+    
+    // Copy all tags to config structure
+    for (uint16_t i = 0; i < s_tag_count && i < TAG_DB_MAX_PERSISTENT_TAGS; i++)
+    {
+        strncpy(config.tags[i].name, s_tags[i].name, TAG_NAME_MAX_LEN - 1);
+        config.tags[i].name[TAG_NAME_MAX_LEN - 1] = '\0';
+        config.tags[i].data_type = (uint8_t)s_tags[i].data_type;
+        config.tags[i].enabled = 1;
+        memset(config.tags[i].reserved, 0, sizeof(config.tags[i].reserved));
+    }
+    
+    // Save to flash via config system
+    if (!config_set_tag_database(&config))
+    {
+        LOG_ERROR("Failed to set tag database config");
+        return false;
+    }
+    
+    // Trigger flash write
+    if (!config_save_to_flash())
+    {
+        LOG_ERROR("Failed to save tag database to flash");
+        return false;
+    }
+    
+    LOG_INFO("Saved %d tags to flash", s_tag_count);
+    return true;
+}
+
+/**
+ * @brief Create tag and optionally save to flash
+ */
+tag_handle_t tag_db_create_persistent(const char *name, tag_data_type_t data_type, bool persist)
+{
+    // Create tag in runtime database
+    tag_handle_t handle = tag_db_create(name, data_type);
+    
+    if (handle == TAG_HANDLE_INVALID)
+    {
+        return TAG_HANDLE_INVALID;
+    }
+    
+    // Optionally persist to flash
+    if (persist)
+    {
+        if (!config_add_tag_definition(name, (uint8_t)data_type))
+        {
+            LOG_WARN("Tag created in RAM but failed to persist: %s", name);
+            // Don't fail - tag still exists in RAM
+        }
+        else
+        {
+            config_save_to_flash();
+            LOG_INFO("Tag persisted to flash: %s", name);
+        }
+    }
+    
+    return handle;
 }
