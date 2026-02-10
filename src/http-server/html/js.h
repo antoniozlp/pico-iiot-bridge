@@ -122,7 +122,95 @@
             "})"\
             ".catch(function(err){ alert('Error saving data point: ' + err); });"\
     "}"\
-    "document.addEventListener('DOMContentLoaded', loadConfig);"\
+    "function showCreateTagForm() {"\
+        "document.getElementById('create-tag-form').style.display = 'block';"\
+    "}"\
+    "function hideCreateTagForm() {"\
+        "document.getElementById('create-tag-form').style.display = 'none';"\
+    "}"\
+    "function submitCreateTag(e, form) {"\
+        "e.preventDefault();"\
+        "var formData = new FormData(form);"\
+        "var params = new URLSearchParams();"\
+        "for(var pair of formData.entries()){ params.append(pair[0], pair[1]); }"\
+        "fetch(form.action, { method:'POST', body:params })"\
+            ".then(function(res){ return res.json(); })"\
+            ".then(function(data){"\
+                "if(data.success){"\
+                    "alert('Tag created successfully!');"\
+                    "hideCreateTagForm();"\
+                    "refreshTags();"\
+                "}else{"\
+                    "alert('Error: ' + (data.error || 'Failed to create tag'));"\
+                "}"\
+            "})"\
+            ".catch(function(err){ alert('Error creating tag: ' + err); });"\
+    "}"\
+    "function deleteTag(tagName) {"\
+        "if(!confirm('Delete tag \"' + tagName + '\"?')) return;"\
+        "var params = new URLSearchParams();"\
+        "params.append('tag_name', tagName);"\
+        "fetch('delete_tag.cgi', { method:'POST', body:params })"\
+            ".then(function(res){ return res.json(); })"\
+            ".then(function(data){"\
+                "if(data.success){"\
+                    "alert('Tag deleted successfully!');"\
+                    "refreshTags();"\
+                "}else{"\
+                    "alert('Error: ' + (data.error || 'Failed to delete tag'));"\
+                "}"\
+            "})"\
+            ".catch(function(err){ alert('Error deleting tag: ' + err); });"\
+    "}"\
+    "function refreshTags() {"\
+        "fetch('get_tags.cgi')"\
+            ".then(function(res){ return res.json(); })"\
+            ".then(function(data){"\
+                "var tbody = document.getElementById('tags-tbody');"\
+                "tbody.innerHTML = '';"\
+                "if(data.tags && data.tags.length > 0){"\
+                    "var countText = data.tags.length + ' tags';"\
+                    "if(data.truncated && data.truncated > 0){"\
+                        "countText += ' (⚠️ ' + data.truncated + ' more not shown)';"\
+                    "}"\
+                    "document.getElementById('tag-count').textContent = countText;"\
+                    "data.tags.forEach(function(tag){"\
+                        "var row = document.createElement('tr');"\
+                        "row.style.borderBottom = '1px solid #ddd';"\
+                        "var typeNames = ['BOOL','UINT8','UINT16','UINT32','INT16','INT32','FLOAT'];"\
+                        "var qualityNames = ['GOOD','BAD','UNCERTAIN'];"\
+                        "var value = tag.value;"\
+                        "if(tag.type === 'float' || tag.type === 6){ value = parseFloat(value).toFixed(2); }"\
+                        "var age = tag.age || 0;"\
+                        "var ageStr = age < 60 ? age + 's ago' : (age < 3600 ? Math.floor(age/60) + 'm ago' : Math.floor(age/3600) + 'h ago');"\
+                        "row.innerHTML = "\
+                            "'<td style=\"padding:8px; border:1px solid #ddd;\">' + tag.handle + '</td>' +"\
+                            "'<td style=\"padding:8px; border:1px solid #ddd; font-weight:bold;\">' + tag.name + '</td>' +"\
+                            "'<td style=\"padding:8px; border:1px solid #ddd;\">' + typeNames[tag.type] + '</td>' +"\
+                            "'<td style=\"padding:8px; border:1px solid #ddd;\">' + value + '</td>' +"\
+                            "'<td style=\"padding:8px; border:1px solid #ddd;\">' + qualityNames[tag.quality] + '</td>' +"\
+                            "'<td style=\"padding:8px; border:1px solid #ddd;\">' + ageStr + '</td>' +"\
+                            "'<td style=\"padding:8px; border:1px solid #ddd; text-align:center;\">' +"\
+                                "'<button onclick=\"deleteTag(\\'' + tag.name + '\\')\" style=\"padding:4px 8px; background:#f44336; color:white; border:none; border-radius:3px; cursor:pointer; font-size:12px;\">Delete</button>' +"\
+                            "'</td>';"\
+                        "tbody.appendChild(row);"\
+                    "});"\
+                    "if(data.truncated && data.truncated > 0){"\
+                        "var warningRow = document.createElement('tr');"\
+                        "warningRow.innerHTML = '<td colspan=\"7\" style=\"padding:10px; text-align:center; background:#fff3cd; color:#856404; border:1px solid #ffeaa7;\">⚠️ Warning: ' + data.truncated + ' tags not displayed due to buffer size limit</td>';"\
+                        "tbody.appendChild(warningRow);"\
+                    "}"\
+                "}else{"\
+                    "document.getElementById('tag-count').textContent = '0 tags';"\
+                    "tbody.innerHTML = '<tr><td colspan=\"7\" style=\"padding:20px; text-align:center; color:#999;\">No tags configured</td></tr>';"\
+                "}"\
+            "})"\
+            ".catch(function(err){ console.log('Error fetching tags: ', err); });"\
+    "}"\
+    "document.addEventListener('DOMContentLoaded', function(){"\
+        "loadConfig();"\
+        "setInterval(refreshTags, 2000);"\
+    "});"\
     "</script>"
 
 #endif // _HTML_JS_H_

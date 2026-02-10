@@ -10,11 +10,14 @@
 #include <string.h>
 
 #include "pico/stdlib.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #include "httpUtil.h"
 
 #include "system_config.h"
 #include "logger.h"
+#include "tag_database.h"
 
 /**
  * @brief Safely copy text string with null termination
@@ -602,6 +605,274 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 	return changed ? HTTP_OK : HTTP_FAILED;
 }
 
+/**
+ * @brief Handle get_tags.cgi GET request
+ * 
+ * Returns JSON array of all tags with their current values, quality, and metadata.
+ * Uses bounded buffer writes to prevent overflow.
+ * 
+ * @param buf Buffer to write JSON response
+ * @param len Pointer to store response length
+ * @return HTTP_OK on success
+ */
+static uint8_t handle_get_tags(uint8_t * buf, uint16_t * len)
+{
+	// Maximum safe buffer size (typical HTTP response buffer minus headers)
+	// DATA_BUF_SIZE is 2048, minus ~200 for headers = ~1800 bytes safe
+	#define MAX_RESPONSE_SIZE 1800
+	#define SAFETY_MARGIN 100  // Reserve space for closing tags
+	
+	// Get current time for age calculation
+	uint32_t current_time_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+	
+	// Start JSON array
+	int written = snprintf((char *)buf, MAX_RESPONSE_SIZE, "{\"tags\":[");
+	if (written < 0 || written >= MAX_RESPONSE_SIZE)
+	{
+		LOG_ERROR("Failed to initialize tags JSON response");
+		*len = 0;
+		return HTTP_FAILED;
+	}
+	*len = (uint16_t)written;
+	
+	uint8_t first = 1;
+	uint16_t truncated = 0;  // Count of tags that didn't fit
+	
+	// Iterate through all possible handles (up to high water mark)
+	// tag_db_get_metadata will return false for deleted tags
+	for (uint16_t i = 0; i < TAG_DATABASE_MAX_TAGS; i++)
+	{
+		tag_metadata_t metadata;
+		if (tag_db_get_metadata((tag_handle_t)i, &metadata))
+		{
+			// Check if we have enough space left (estimate ~200 bytes per tag + safety margin)
+			if (*len >= (MAX_RESPONSE_SIZE - SAFETY_MARGIN - 200))
+			{
+				truncated++;
+				continue;  // Skip remaining tags to prevent overflow
+			}
+			
+			// Add comma separator (except before first element)
+			if (!first)
+			{
+				written = snprintf((char *)buf + *len, MAX_RESPONSE_SIZE - *len, ",");
+				if (written < 0 || *len + written >= MAX_RESPONSE_SIZE - SAFETY_MARGIN)
+				{
+					truncated++;
+					break;
+				}
+				*len += (uint16_t)written;
+			}
+			first = 0;
+			
+			// Format value based on type
+			char value_str[32] = {0};
+			switch (metadata.data_type)
+			{
+				case TAG_TYPE_BOOL:
+					snprintf(value_str, sizeof(value_str), "%d", metadata.value.bool_val ? 1 : 0);
+					break;
+				case TAG_TYPE_UINT8:
+					snprintf(value_str, sizeof(value_str), "%u", metadata.value.u8_val);
+					break;
+				case TAG_TYPE_UINT16:
+					snprintf(value_str, sizeof(value_str), "%u", metadata.value.u16_val);
+					break;
+				case TAG_TYPE_UINT32:
+					snprintf(value_str, sizeof(value_str), "%lu", (unsigned long)metadata.value.u32_val);
+					break;
+				case TAG_TYPE_INT16:
+					snprintf(value_str, sizeof(value_str), "%d", metadata.value.i16_val);
+					break;
+				case TAG_TYPE_INT32:
+					snprintf(value_str, sizeof(value_str), "%ld", (long)metadata.value.i32_val);
+					break;
+				case TAG_TYPE_FLOAT:
+					snprintf(value_str, sizeof(value_str), "%.2f", metadata.value.float_val);
+					break;
+				default:
+					snprintf(value_str, sizeof(value_str), "0");
+					break;
+			}
+			
+			// Calculate age in seconds (handle tick counter wrap-around)
+			uint32_t age_seconds;
+			if (current_time_ms >= metadata.timestamp_ms)
+			{
+				age_seconds = (current_time_ms - metadata.timestamp_ms) / 1000;
+			}
+			else
+			{
+				// Handle wrap-around (occurs after ~49 days)
+				age_seconds = ((UINT32_MAX - metadata.timestamp_ms) + current_time_ms + 1) / 1000;
+			}
+			
+			// Build JSON object for this tag (bounded write)
+			written = snprintf((char *)buf + *len, MAX_RESPONSE_SIZE - *len,
+							   "{\"handle\":%u,\"name\":\"%s\",\"type\":%u,\"value\":%s,\"quality\":%u,\"age\":%lu}",
+							   i,
+							   metadata.name,
+							   metadata.data_type,
+							   value_str,
+							   metadata.quality,
+							   (unsigned long)age_seconds);
+			
+			if (written < 0 || *len + written >= MAX_RESPONSE_SIZE - SAFETY_MARGIN)
+			{
+				// Tag didn't fit, stop adding more
+				truncated++;
+				break;
+			}
+			
+			*len += (uint16_t)written;
+		}
+	}
+	
+	// Close JSON array (with truncation warning if needed)
+	if (truncated > 0)
+	{
+		written = snprintf((char *)buf + *len, MAX_RESPONSE_SIZE - *len,
+						   "],\"truncated\":%u}", truncated);
+		LOG_WARN("Tag list truncated: %u tags omitted due to buffer size", truncated);
+	}
+	else
+	{
+		written = snprintf((char *)buf + *len, MAX_RESPONSE_SIZE - *len, "]}");
+	}
+	
+	if (written < 0 || *len + written >= MAX_RESPONSE_SIZE)
+	{
+		LOG_ERROR("Failed to close tags JSON response");
+		return HTTP_FAILED;
+	}
+	
+	*len += (uint16_t)written;
+	return HTTP_OK;
+	
+	#undef MAX_RESPONSE_SIZE
+	#undef SAFETY_MARGIN
+}
+
+/**
+ * @brief Handle create_tag.cgi POST request
+ * 
+ * Creates a new tag and optionally persists it to flash.
+ * 
+ * Expected parameters:
+ * - tag_name: Name of the tag (max 15 chars)
+ * - data_type: Data type (0-6)
+ * 
+ * @param uri URI string with query parameters
+ * @param buf Buffer to write JSON response
+ * @param len Pointer to store response length
+ * @return HTTP_OK on success, HTTP_FAILED on error
+ */
+static uint8_t handle_create_tag(uint8_t * uri, uint8_t * buf, uint16_t * len)
+{
+	uint8_t * param;
+	char tag_name[TAG_NAME_MAX_LEN] = {0};
+	uint8_t data_type = 0;
+	
+	// Get tag name
+	if ((param = get_http_param_value((char *)uri, "tag_name")))
+	{
+		copy_text(tag_name, sizeof(tag_name), param);
+	}
+	else
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Missing tag_name\"}");
+		return HTTP_FAILED;
+	}
+	
+	// Validate tag name length
+	if (strlen(tag_name) == 0 || strlen(tag_name) >= TAG_NAME_MAX_LEN)
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Invalid tag name length\"}");
+		return HTTP_FAILED;
+	}
+	
+	// Get data type
+	if ((param = get_http_param_value((char *)uri, "data_type")))
+	{
+		data_type = (uint8_t)atoi((char *)param);
+	}
+	else
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Missing data_type\"}");
+		return HTTP_FAILED;
+	}
+	
+	// Validate data type
+	if (data_type > TAG_TYPE_FLOAT)
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Invalid data_type\"}");
+		return HTTP_FAILED;
+	}
+	
+	// Create tag with persistence
+	tag_handle_t handle = tag_db_create_persistent(tag_name, (tag_data_type_t)data_type, true);
+	
+	if (handle == TAG_HANDLE_INVALID)
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Failed to create tag\"}");
+		return HTTP_FAILED;
+	}
+	
+	LOG_INFO("Tag created via HTTP: %s (handle=%d, type=%d)", tag_name, handle, data_type);
+	
+	*len = sprintf((char *)buf, "{\"success\":true,\"handle\":%u,\"name\":\"%s\"}", handle, tag_name);
+	return HTTP_OK;
+}
+
+/**
+ * @brief Handle delete_tag.cgi POST request
+ * 
+ * Deletes a tag from runtime database and flash.
+ * 
+ * Expected parameters:
+ * - tag_name: Name of the tag to delete
+ * 
+ * @param uri URI string with query parameters
+ * @param buf Buffer to write JSON response
+ * @param len Pointer to store response length
+ * @return HTTP_OK on success, HTTP_FAILED on error
+ */
+static uint8_t handle_delete_tag(uint8_t * uri, uint8_t * buf, uint16_t * len)
+{
+	uint8_t * param;
+	char tag_name[TAG_NAME_MAX_LEN] = {0};
+	
+	// Get tag name
+	if ((param = get_http_param_value((char *)uri, "tag_name")))
+	{
+		copy_text(tag_name, sizeof(tag_name), param);
+	}
+	else
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Missing tag_name\"}");
+		return HTTP_FAILED;
+	}
+	
+	// Validate tag name length
+	if (strlen(tag_name) == 0)
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Invalid tag name\"}");
+		return HTTP_FAILED;
+	}
+	
+	// Delete tag with persistence
+	if (!tag_db_delete(tag_name, true))
+	{
+		*len = sprintf((char *)buf, "{\"success\":false,\"error\":\"Tag not found\"}");
+		return HTTP_FAILED;
+	}
+	
+	LOG_INFO("Tag deleted via HTTP: %s", tag_name);
+	
+	*len = sprintf((char *)buf, "{\"success\":true,\"name\":\"%s\"}", tag_name);
+	return HTTP_OK;
+}
+
 uint8_t http_get_cgi_handler(uint8_t * uri_name, uint8_t * buf, uint32_t * file_len)
 {
 	uint8_t ret = HTTP_OK;
@@ -632,17 +903,29 @@ uint8_t http_post_cgi_handler(uint8_t * uri_name, st_http_request * p_http_reque
 	uint16_t len = 0;
 	uint8_t val = 0;
 
-	if(predefined_set_cgi_processor(uri_name, p_http_request->URI, buf, &len))
+	// Try predefined processors first
+	uint8_t processed = predefined_set_cgi_processor(uri_name, p_http_request->URI, buf, &len);
+	
+	// Check if URI was handled by a predefined processor
+	// Note: We need to distinguish "not handled" from "handled with error"
+	// If len > 0, a response was prepared (even if processing failed)
+	if(len > 0)
 	{
-		;
+		// Processor handled the request (success or failure with response)
+		*file_len = len;
+		return processed;
 	}
-	else if(strcmp((const char *)uri_name, "example.cgi") == 0)
+	
+	// Not handled by predefined processors, try custom handlers
+	if(strcmp((const char *)uri_name, "example.cgi") == 0)
 	{
 		val = 1;
 		len = sprintf((char *)buf, "%d", val);
+		ret = HTTP_OK;
 	}
 	else
 	{
+		// CGI not found
 		ret = HTTP_FAILED;
 	}
 
@@ -652,6 +935,11 @@ uint8_t http_post_cgi_handler(uint8_t * uri_name, st_http_request * p_http_reque
 
 uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t * len)
 {
+	if(strcmp((const char *)uri_name, "get_tags.cgi") == 0)
+	{
+		return handle_get_tags(buf, len);
+	}
+	
 	if(strcmp((const char *)uri_name, "get_config.cgi") == 0)
 	{
 		wiz_NetInfo net_info;
@@ -740,6 +1028,16 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 
 uint8_t predefined_set_cgi_processor(uint8_t * uri_name, uint8_t * uri, uint8_t * buf, uint16_t * en)
 {
+	if(strcmp((const char *)uri_name, "create_tag.cgi") == 0)
+	{
+		return handle_create_tag(uri, buf, en);
+	}
+	
+	if(strcmp((const char *)uri_name, "delete_tag.cgi") == 0)
+	{
+		return handle_delete_tag(uri, buf, en);
+	}
+	
 	if(strcmp((const char *)uri_name, "set_network.cgi") == 0)
 	{
 		uint8_t handled = handle_set_network(uri);
