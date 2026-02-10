@@ -64,6 +64,14 @@ The Pico I-IoT Bridge is designed to bridge different industrial communication p
 - **Flash Persistence**: Automatic save/load with version control
 - **Dual-Core Safe**: Coordinated flash writes across both CPU cores
 
+#### Tag Database
+- **Centralized Variable Storage**: Named tag system for sharing data between tasks
+- **Non-blocking Writes**: Queue-based communication for producer tasks
+- **Quality Indicators**: Track data validity (GOOD, BAD, UNCERTAIN)
+- **Type Support**: BOOL, UINT8, UINT16, UINT32, INT16, INT32, FLOAT
+- **Minimal Overhead**: ~6 KB RAM for 128 tags
+- **Thread-Safe**: FreeRTOS mutex and queue protection
+
 #### Communication Interfaces
 1. **HTTP Server**
    - Web UI for user-friendly management
@@ -108,11 +116,36 @@ This project uses the **Raspberry Pi Pico VS Code Extension** for building and f
 For detailed instructions on setting up the development environment, refer to the official [Getting Started with Raspberry Pi Pico](https://pip-assets.raspberrypi.com/categories/610-raspberry-pi-pico/documents/RP-008276-DS-1-getting-started-with-pico.pdf) guide.
 
 
+## Tag Database Usage
+
+The tag database provides a centralized way to share variables between tasks (e.g., Modbus, MQTT, HTTP server).
+
+### Quick Example
+
+```c
+// Create tags at initialization
+tag_handle_t temp_handle = tag_db_create("TEMP_SENSOR_01", TAG_TYPE_FLOAT);
+
+// Producer task writes value
+tag_value_t value;
+value.float_val = 25.3;
+tag_db_write(temp_handle, value, TAG_QUALITY_GOOD);
+
+// Consumer task reads value
+tag_db_read(temp_handle, &value, NULL, NULL);
+float temperature = value.float_val;
+```
+
+For detailed examples, see `src/tag-database/tag_database_example.c` and `VARIABLE_DATABASE_PROPOSAL_V3.md`.
+
 ## Development Roadmap
 
+- [x] Tag Database for variable sharing
+- [x] Modbus RTU client
+- [ ] HTTP server integration with tag database
+- [ ] Modbus RTU server
 - [ ] Serial to TCP transparent bridge
 - [ ] Modbus TCP to RTU converter
-- [ ] Modbus RTU master/slave
 - [ ] Modbus TCP client/server
 - [ ] Remote I/O functionality
 - [ ] MQTT client support
