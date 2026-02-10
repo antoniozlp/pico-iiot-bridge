@@ -19,6 +19,7 @@ target_link_libraries(http_server PUBLIC
         config
         logger
         network_task
+        tag-database
         )
 
 # Disable HTTP server debug messages from WIZnet library

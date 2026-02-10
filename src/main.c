@@ -24,6 +24,7 @@
 #include "serial_to_tcp.h"
 #include "system_config.h"
 #include "modbus_rtu.h"
+#include "tag_database.h"
 
 /**
  * @brief Application entry point
@@ -68,6 +69,17 @@ int main(void)
     {
         LOG_WARN("Using default configuration");
     }
+
+    // Initialize tag database (before protocol tasks)
+    if (!tag_db_init())
+    {
+        LOG_ERROR("Failed to initialize tag database");
+        return 1;
+    }
+
+    // Load tags from flash (if any exist)
+    uint16_t loaded_count = tag_db_load_from_flash();
+    
 
     // Initialize and create FreeRTOS tasks
     if (!network_task_init())

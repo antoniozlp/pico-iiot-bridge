@@ -177,7 +177,9 @@ add_subdirectory(src/rtos_views_support)
 # ========================= MODBUS =========================
 add_subdirectory(lib/nanoMODBUS)
 add_subdirectory(src/modbus)
-# Add nanoMODBUS library
+
+# ========================= Tag Database =========================
+add_subdirectory(src/tag-database)
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -211,7 +213,8 @@ target_link_libraries(pico-iiot-bridge
         network_task
         rtos_views_support
         nanomodbus
-        modbus)
+        modbus
+        tag-database)
 
 # Add the standard include files to the build
 target_include_directories(pico-iiot-bridge PRIVATE
