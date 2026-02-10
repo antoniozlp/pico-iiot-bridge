@@ -85,6 +85,7 @@ typedef struct {
     tag_quality_t quality;          // Current quality status
     uint32_t timestamp_ms;          // Last update time
     tag_value_t value;              // Current value
+    uint8_t allocated;              // 1=active, 0=deleted (handle remains valid but unused)
 } tag_metadata_t;
 
 /**
@@ -250,5 +251,17 @@ bool tag_db_save_to_flash(void);
  * @return Tag handle or TAG_HANDLE_INVALID on error
  */
 tag_handle_t tag_db_create_persistent(const char *name, tag_data_type_t data_type, bool persist);
+
+/**
+ * @brief Delete tag by name
+ * 
+ * Removes tag from runtime database and optionally from flash.
+ * Note: This invalidates tag handles and may cause re-indexing.
+ * 
+ * @param name Tag name to delete
+ * @param persist If true, also removes from flash
+ * @return true if deleted, false if not found
+ */
+bool tag_db_delete(const char *name, bool persist);
 
 #endif // _TAG_DATABASE_H_
