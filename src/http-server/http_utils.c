@@ -583,6 +583,24 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		}
 	}
 
+	// Parse tag mappings (tag0 through tag9)
+	for (uint8_t i = 0; i < MODBUS_RTU_MAX_REG_COUNT; i++)
+	{
+		char param_name[8];
+		snprintf(param_name, sizeof(param_name), "tag%d", i);
+		
+		if((param = get_http_param_value((char *)uri, param_name)))
+		{
+			int val = ATOI(param, 10);
+			// Value 255 means not mapped, 0-127 are valid tag handles
+			if (val >= 0 && val <= 255)
+			{
+				dp->tag_handles[i] = (uint8_t)val;
+				changed = 1;
+			}
+		}
+	}
+
 	if(changed)
 	{
 		if (!config_set_modbus_rtu_client_config(&client_config))
@@ -1007,14 +1025,24 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 		// Append data points array
 		for (int i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
 		{
-			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u}",
+			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"tag_handles\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]}",
 							i > 0 ? "," : "",
 							modbus_config.data_points[i].enabled ? 1 : 0,
 							(unsigned int)modbus_config.data_points[i].slave_address,
 							modbus_config.data_points[i].data_type,
 							modbus_config.data_points[i].operation,
 							(unsigned int)modbus_config.data_points[i].start_address,
-							(unsigned int)modbus_config.data_points[i].count);
+							(unsigned int)modbus_config.data_points[i].count,
+							modbus_config.data_points[i].tag_handles[0],
+							modbus_config.data_points[i].tag_handles[1],
+							modbus_config.data_points[i].tag_handles[2],
+							modbus_config.data_points[i].tag_handles[3],
+							modbus_config.data_points[i].tag_handles[4],
+							modbus_config.data_points[i].tag_handles[5],
+							modbus_config.data_points[i].tag_handles[6],
+							modbus_config.data_points[i].tag_handles[7],
+							modbus_config.data_points[i].tag_handles[8],
+							modbus_config.data_points[i].tag_handles[9]);
 		}
 		
 		// Close JSON

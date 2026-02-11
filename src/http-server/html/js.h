@@ -77,6 +77,14 @@
                             "if(dp.operation !== undefined) document.getElementById('dp'+i+'_op').value = dp.operation;"\
                             "if(dp.start_address !== undefined) document.getElementById('dp'+i+'_addr').value = dp.start_address;"\
                             "if(dp.count !== undefined) document.getElementById('dp'+i+'_count').value = dp.count;"\
+                            "if(dp.tag_handles) {"\
+                                "for(var j=0; j<10; j++){"\
+                                    "var tagSelect = document.getElementById('dp'+i+'_tag'+j);"\
+                                    "if(tagSelect && dp.tag_handles[j] !== undefined){"\
+                                        "tagSelect.value = dp.tag_handles[j];"\
+                                    "}"\
+                                "}"\
+                            "}"\
                         "}"\
                     "}"\
                 "}"\
@@ -207,8 +215,33 @@
             "})"\
             ".catch(function(err){ console.log('Error fetching tags: ', err); });"\
     "}"\
+    "function loadTagsForMapping() {"\
+        "fetch('get_tags.cgi')"\
+            ".then(function(res){ return res.json(); })"\
+            ".then(function(data){"\
+                "if(data.tags && data.tags.length > 0){"\
+                    "var typeNames = ['BOOL','UINT8','UINT16','UINT32','INT16','INT32','FLOAT'];"\
+                    "for(var dpIdx = 0; dpIdx < 10; dpIdx++){"\
+                        "for(var regIdx = 0; regIdx < 10; regIdx++){"\
+                            "var select = document.getElementById('dp' + dpIdx + '_tag' + regIdx);"\
+                            "if(select){"\
+                                "select.innerHTML = '<option value=\"255\">Not Mapped</option>';"\
+                                "data.tags.forEach(function(tag){"\
+                                    "var opt = document.createElement('option');"\
+                                    "opt.value = tag.handle;"\
+                                    "opt.textContent = tag.name + ' (' + typeNames[tag.type] + ')';"\
+                                    "select.appendChild(opt);"\
+                                "});"\
+                            "}"\
+                        "}"\
+                    "}"\
+                "}"\
+            "})"\
+            ".catch(function(err){ console.log('Error loading tags for mapping: ', err); });"\
+    "}"\
     "document.addEventListener('DOMContentLoaded', function(){"\
         "loadConfig();"\
+        "loadTagsForMapping();"\
         "setInterval(refreshTags, 2000);"\
     "});"\
     "</script>"

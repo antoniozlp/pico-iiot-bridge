@@ -55,6 +55,29 @@
             "<div><label for=\"dp0_op\">Operation</label><select id=\"dp0_op\" name=\"operation\"><option value=\"0\">Read</option><option value=\"1\">Write</option></select></div></div>"\
             "<div class=\"row\"><div><label for=\"dp0_addr\">Start Address</label><input id=\"dp0_addr\" name=\"start_address\" type=\"number\" min=\"0\" max=\"65535\" value=\"0\"></div>"\
             "<div><label for=\"dp0_count\">Count (1-10)</label><input id=\"dp0_count\" name=\"count\" type=\"number\" min=\"1\" max=\"10\" value=\"1\"></div></div>"\
+            "<div style=\"margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;\">"\
+                "<label style=\"font-weight: bold; display: block; margin-bottom: 8px;\">Tag Mapping (map registers to tags):</label>"\
+                "<div class=\"row\">"\
+                    "<div><label for=\"dp0_tag0\">Reg/Coil 0:</label><select id=\"dp0_tag0\" name=\"tag0\"><option value=\"255\">Not Mapped</option></select></div>"\
+                    "<div><label for=\"dp0_tag1\">Reg/Coil 1:</label><select id=\"dp0_tag1\" name=\"tag1\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "</div>"\
+                "<div class=\"row\">"\
+                    "<div><label for=\"dp0_tag2\">Reg/Coil 2:</label><select id=\"dp0_tag2\" name=\"tag2\"><option value=\"255\">Not Mapped</option></select></div>"\
+                    "<div><label for=\"dp0_tag3\">Reg/Coil 3:</label><select id=\"dp0_tag3\" name=\"tag3\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "</div>"\
+                "<div class=\"row\">"\
+                    "<div><label for=\"dp0_tag4\">Reg/Coil 4:</label><select id=\"dp0_tag4\" name=\"tag4\"><option value=\"255\">Not Mapped</option></select></div>"\
+                    "<div><label for=\"dp0_tag5\">Reg/Coil 5:</label><select id=\"dp0_tag5\" name=\"tag5\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "</div>"\
+                "<div class=\"row\">"\
+                    "<div><label for=\"dp0_tag6\">Reg/Coil 6:</label><select id=\"dp0_tag6\" name=\"tag6\"><option value=\"255\">Not Mapped</option></select></div>"\
+                    "<div><label for=\"dp0_tag7\">Reg/Coil 7:</label><select id=\"dp0_tag7\" name=\"tag7\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "</div>"\
+                "<div class=\"row\">"\
+                    "<div><label for=\"dp0_tag8\">Reg/Coil 8:</label><select id=\"dp0_tag8\" name=\"tag8\"><option value=\"255\">Not Mapped</option></select></div>"\
+                    "<div><label for=\"dp0_tag9\">Reg/Coil 9:</label><select id=\"dp0_tag9\" name=\"tag9\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "</div>"\
+            "</div>"\
             "<button type=\"submit\">Save Data Point 0</button>"\
         "</form>"\
         HTML_DATA_POINT_FORM(1) \
@@ -111,6 +134,29 @@
             "<div>"\
                 "<label for=\"dp" #N "_count\">Count (1-10)</label>"\
                 "<input id=\"dp" #N "_count\" name=\"count\" type=\"number\" min=\"1\" max=\"10\" value=\"1\">"\
+            "</div>"\
+        "</div>"\
+        "<div style=\"margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;\">"\
+            "<label style=\"font-weight: bold; display: block; margin-bottom: 8px;\">Tag Mapping (map registers to tags):</label>"\
+            "<div class=\"row\">"\
+                "<div><label for=\"dp" #N "_tag0\">Reg/Coil 0:</label><select id=\"dp" #N "_tag0\" name=\"tag0\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "<div><label for=\"dp" #N "_tag1\">Reg/Coil 1:</label><select id=\"dp" #N "_tag1\" name=\"tag1\"><option value=\"255\">Not Mapped</option></select></div>"\
+            "</div>"\
+            "<div class=\"row\">"\
+                "<div><label for=\"dp" #N "_tag2\">Reg/Coil 2:</label><select id=\"dp" #N "_tag2\" name=\"tag2\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "<div><label for=\"dp" #N "_tag3\">Reg/Coil 3:</label><select id=\"dp" #N "_tag3\" name=\"tag3\"><option value=\"255\">Not Mapped</option></select></div>"\
+            "</div>"\
+            "<div class=\"row\">"\
+                "<div><label for=\"dp" #N "_tag4\">Reg/Coil 4:</label><select id=\"dp" #N "_tag4\" name=\"tag4\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "<div><label for=\"dp" #N "_tag5\">Reg/Coil 5:</label><select id=\"dp" #N "_tag5\" name=\"tag5\"><option value=\"255\">Not Mapped</option></select></div>"\
+            "</div>"\
+            "<div class=\"row\">"\
+                "<div><label for=\"dp" #N "_tag6\">Reg/Coil 6:</label><select id=\"dp" #N "_tag6\" name=\"tag6\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "<div><label for=\"dp" #N "_tag7\">Reg/Coil 7:</label><select id=\"dp" #N "_tag7\" name=\"tag7\"><option value=\"255\">Not Mapped</option></select></div>"\
+            "</div>"\
+            "<div class=\"row\">"\
+                "<div><label for=\"dp" #N "_tag8\">Reg/Coil 8:</label><select id=\"dp" #N "_tag8\" name=\"tag8\"><option value=\"255\">Not Mapped</option></select></div>"\
+                "<div><label for=\"dp" #N "_tag9\">Reg/Coil 9:</label><select id=\"dp" #N "_tag9\" name=\"tag9\"><option value=\"255\">Not Mapped</option></select></div>"\
             "</div>"\
         "</div>"\
         "<button type=\"submit\">Save Data Point " #N "</button>"\
