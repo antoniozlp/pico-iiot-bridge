@@ -12,7 +12,7 @@
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
 // In debugger Memory view use: 0x101F0000 (XIP_BASE + FLASH_TARGET_OFFSET)
 #define CONFIG_VERSION_MAJOR 0
-#define CONFIG_VERSION_MINOR 1  // Incremented for tag database addition
+#define CONFIG_VERSION_MINOR 2  // Incremented for tag mapping and handle stability
 #define CONFIG_VERSION_PATCH 0
 
 // ============================================================================
@@ -86,6 +86,7 @@ typedef enum {
 // Modbus RTU data point configuration (stored in flash)
 #define MODBUS_RTU_DATA_POINTS_MAX   10     // Maximum data points per client
 #define MODBUS_RTU_MAX_REG_COUNT     10     // Max registers/coils per data point
+#define MODBUS_TAG_MAP_INVALID       0xFF   // Tag handle indicating unmapped register
 
 typedef struct {
     uint8_t enabled;                        // Enable/disable this data point
@@ -94,6 +95,10 @@ typedef struct {
     modbus_rtu_operation_t operation;       // Read or write
     uint16_t start_address;                 // Starting register/coil address
     uint16_t count;                         // Number of registers/coils
+    
+    // Tag mapping: which tag receives which register/coil value
+    // MODBUS_TAG_MAP_INVALID (0xFF) = register not mapped to any tag
+    uint8_t tag_handles[MODBUS_RTU_MAX_REG_COUNT];
 } modbus_rtu_data_point_config_t;
 
 // Modbus RTU client configuration

@@ -108,41 +108,13 @@ void config_set_default(void)
         g_sys_cfg.modbus_rtu_client.data_points[i].operation = MODBUS_OP_READ;
         g_sys_cfg.modbus_rtu_client.data_points[i].start_address = 0;
         g_sys_cfg.modbus_rtu_client.data_points[i].count = 1;
+        
+        // Initialize all tag mappings as unmapped
+        for (uint8_t j = 0; j < MODBUS_RTU_MAX_REG_COUNT; j++)
+        {
+            g_sys_cfg.modbus_rtu_client.data_points[i].tag_handles[j] = MODBUS_TAG_MAP_INVALID;
+        }
     }
-    
-    // // Data point 0: Read 4 holding registers from address 0 (common PLC data)
-    // g_sys_cfg.modbus_rtu_client.data_points[0].enabled = 0;  // Disabled until configured
-    // g_sys_cfg.modbus_rtu_client.data_points[0].slave_address = 1;
-    // g_sys_cfg.modbus_rtu_client.data_points[0].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
-    // g_sys_cfg.modbus_rtu_client.data_points[0].operation = MODBUS_OP_READ;
-    // g_sys_cfg.modbus_rtu_client.data_points[0].start_address = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[0].count = 4;
-    
-    // // Data point 1: Read 8 coils from address 0 (digital outputs status)
-    // g_sys_cfg.modbus_rtu_client.data_points[1].enabled = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[1].slave_address = 1;
-    // g_sys_cfg.modbus_rtu_client.data_points[1].data_type = MODBUS_DATA_TYPE_COIL;
-    // g_sys_cfg.modbus_rtu_client.data_points[1].operation = MODBUS_OP_READ;
-    // g_sys_cfg.modbus_rtu_client.data_points[1].start_address = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[1].count = 8;
-    
-    // // Data point 2: Read 4 input registers from address 0 (analog sensors)
-    // g_sys_cfg.modbus_rtu_client.data_points[2].enabled = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[2].slave_address = 1;
-    // g_sys_cfg.modbus_rtu_client.data_points[2].data_type = MODBUS_DATA_TYPE_INPUT_REGISTER;
-    // g_sys_cfg.modbus_rtu_client.data_points[2].operation = MODBUS_OP_READ;
-    // g_sys_cfg.modbus_rtu_client.data_points[2].start_address = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[2].count = 4;
-    
-    // // Data point 3: Read 8 discrete inputs from address 0 (digital inputs status)
-    // g_sys_cfg.modbus_rtu_client.data_points[3].enabled = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[3].slave_address = 1;
-    // g_sys_cfg.modbus_rtu_client.data_points[3].data_type = MODBUS_DATA_TYPE_DISCRETE_INPUT;
-    // g_sys_cfg.modbus_rtu_client.data_points[3].operation = MODBUS_OP_READ;
-    // g_sys_cfg.modbus_rtu_client.data_points[3].start_address = 0;
-    // g_sys_cfg.modbus_rtu_client.data_points[3].count = 8;
-    
-    // // Remaining data points (4-9) are initialized to disabled with default values above
 
     // Tag database defaults
     g_sys_cfg.tag_database.tag_count = 0;
