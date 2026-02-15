@@ -505,9 +505,9 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 	if((param = get_http_param_value((char *)uri, "dp_idx")))
 	{
 		dp_idx = ATOI(param, 10);
-		if (dp_idx < 0 || dp_idx >= MODBUS_RTU_DATA_POINTS_MAX)
+		if (dp_idx < 0 || dp_idx >= MODBUS_RTU_REQUESTS_MAX)
 		{
-			LOG_ERROR("Invalid data point index %d", dp_idx);
+			LOG_ERROR("Invalid request index %d", dp_idx);
 			return HTTP_FAILED;
 		}
 	}
@@ -524,12 +524,12 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		return HTTP_FAILED;
 	}
 
-	modbus_rtu_data_point_config_t *dp = &client_config.data_points[dp_idx];
+	modbus_rtu_request_config_t *req = &client_config.requests[dp_idx];
 
 	if((param = get_http_param_value((char *)uri, "enabled")))
 	{
 		int val = ATOI(param, 10);
-		dp->enabled = (val != 0);
+		req->enabled = (val != 0);
 		changed = 1;
 	}
 
@@ -538,7 +538,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val >= 1 && val <= 247)
 		{
-			dp->slave_address = (uint8_t)val;
+			req->slave_address = (uint8_t)val;
 			changed = 1;
 		}
 	}
@@ -548,7 +548,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val >= 0 && val <= 3)
 		{
-			dp->data_type = (modbus_rtu_data_type_t)val;
+			req->data_type = (modbus_rtu_data_type_t)val;
 			changed = 1;
 		}
 	}
@@ -558,7 +558,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val == 0 || val == 1)
 		{
-			dp->operation = (modbus_rtu_operation_t)val;
+			req->operation = (modbus_rtu_operation_t)val;
 			changed = 1;
 		}
 	}
@@ -568,7 +568,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val >= 0 && val <= 65535)
 		{
-			dp->start_address = (uint16_t)val;
+			req->start_address = (uint16_t)val;
 			changed = 1;
 		}
 	}
@@ -578,7 +578,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val >= 1 && val <= MODBUS_RTU_MAX_REG_COUNT)
 		{
-			dp->count = (uint16_t)val;
+			req->count = (uint16_t)val;
 			changed = 1;
 		}
 	}
@@ -595,7 +595,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 			// Value 255 means not mapped, 0-127 are valid tag handles
 			if (val >= 0 && val <= 255)
 			{
-				dp->tag_handles[i] = (uint8_t)val;
+				req->tag_handles[i] = (uint8_t)val;
 				changed = 1;
 			}
 		}
@@ -609,9 +609,9 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 			return HTTP_FAILED;
 		}
 		
-		LOG_INFO("Modbus RTU data point %d updated: enabled=%d, slave=%d, type=%d, op=%d, addr=%d, count=%d",
-			   dp_idx, dp->enabled, dp->slave_address, dp->data_type,
-			   dp->operation, dp->start_address, dp->count);
+		LOG_INFO("Modbus RTU request %d updated: enabled=%d, slave=%d, type=%d, op=%d, addr=%d, count=%d",
+			   dp_idx, req->enabled, req->slave_address, req->data_type,
+			   req->operation, req->start_address, req->count);
 
 		if (!config_save_to_flash())
 		{
@@ -990,7 +990,7 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 					   "\"serial0\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},"
 					   "\"serial1\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},"
 					   "\"s2tcp\":{\"enable\":%d,\"serial\":%u,\"mode\":%d,\"lport\":%u,\"timeout\":%u,\"keepalive\":%u,\"maxconn\":%u,\"remoteip\":\"%d.%d.%d.%d\",\"remoteport\":%u},"
-					   "\"modbus\":{\"enable\":%d,\"serial_id\":%u,\"data_points\":[",
+					   "\"modbus\":{\"enable\":%d,\"serial_id\":%u,\"requests\":[",
 					   net_info.mac[0], net_info.mac[1], net_info.mac[2], net_info.mac[3], net_info.mac[4], net_info.mac[5],
 					   net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
 					   net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3],
@@ -1022,27 +1022,27 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 					   modbus_config.enable ? 1 : 0,
 					   (unsigned int)modbus_config.serial_id);
 		
-		// Append data points array
-		for (int i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+		// Append requests array
+		for (int i = 0; i < MODBUS_RTU_REQUESTS_MAX; i++)
 		{
 			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"tag_handles\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]}",
 							i > 0 ? "," : "",
-							modbus_config.data_points[i].enabled ? 1 : 0,
-							(unsigned int)modbus_config.data_points[i].slave_address,
-							modbus_config.data_points[i].data_type,
-							modbus_config.data_points[i].operation,
-							(unsigned int)modbus_config.data_points[i].start_address,
-							(unsigned int)modbus_config.data_points[i].count,
-							modbus_config.data_points[i].tag_handles[0],
-							modbus_config.data_points[i].tag_handles[1],
-							modbus_config.data_points[i].tag_handles[2],
-							modbus_config.data_points[i].tag_handles[3],
-							modbus_config.data_points[i].tag_handles[4],
-							modbus_config.data_points[i].tag_handles[5],
-							modbus_config.data_points[i].tag_handles[6],
-							modbus_config.data_points[i].tag_handles[7],
-							modbus_config.data_points[i].tag_handles[8],
-							modbus_config.data_points[i].tag_handles[9]);
+							modbus_config.requests[i].enabled ? 1 : 0,
+							(unsigned int)modbus_config.requests[i].slave_address,
+							modbus_config.requests[i].data_type,
+							modbus_config.requests[i].operation,
+							(unsigned int)modbus_config.requests[i].start_address,
+							(unsigned int)modbus_config.requests[i].count,
+							modbus_config.requests[i].tag_handles[0],
+							modbus_config.requests[i].tag_handles[1],
+							modbus_config.requests[i].tag_handles[2],
+							modbus_config.requests[i].tag_handles[3],
+							modbus_config.requests[i].tag_handles[4],
+							modbus_config.requests[i].tag_handles[5],
+							modbus_config.requests[i].tag_handles[6],
+							modbus_config.requests[i].tag_handles[7],
+							modbus_config.requests[i].tag_handles[8],
+							modbus_config.requests[i].tag_handles[9]);
 		}
 		
 		// Close JSON

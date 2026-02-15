@@ -15,7 +15,7 @@
         "document.getElementById('serial0-btn').classList.toggle('active', id === 0);"\
         "document.getElementById('serial1-btn').classList.toggle('active', id === 1);"\
     "}"\
-    "function showDataPoint(idx) {"\
+    "function showRequest(idx) {"\
         "for(var i=0; i<10; i++){"\
             "document.getElementById('dp'+i+'-form').style.display = (i === idx) ? 'block' : 'none';"\
             "document.getElementById('dp'+i+'-btn').classList.toggle('active', i === idx);"\
@@ -68,20 +68,20 @@
                 "if(data.modbus) {"\
                     "if(data.modbus.enable !== undefined) document.getElementById('mb_enable').value = data.modbus.enable;"\
                     "if(data.modbus.serial_id !== undefined) document.getElementById('mb_serial').value = data.modbus.serial_id;"\
-                    "if(data.modbus.data_points) {"\
-                        "for(var i=0; i<data.modbus.data_points.length && i<10; i++){"\
-                            "var dp = data.modbus.data_points[i];"\
-                            "if(dp.enabled !== undefined) document.getElementById('dp'+i+'_enable').value = dp.enabled;"\
-                            "if(dp.slave_address !== undefined) document.getElementById('dp'+i+'_slave').value = dp.slave_address;"\
-                            "if(dp.data_type !== undefined) document.getElementById('dp'+i+'_type').value = dp.data_type;"\
-                            "if(dp.operation !== undefined) document.getElementById('dp'+i+'_op').value = dp.operation;"\
-                            "if(dp.start_address !== undefined) document.getElementById('dp'+i+'_addr').value = dp.start_address;"\
-                            "if(dp.count !== undefined) document.getElementById('dp'+i+'_count').value = dp.count;"\
-                            "if(dp.tag_handles) {"\
+                    "if(data.modbus.requests) {"\
+                        "for(var i=0; i<data.modbus.requests.length && i<10; i++){"\
+                            "var req = data.modbus.requests[i];"\
+                            "if(req.enabled !== undefined) document.getElementById('dp'+i+'_enable').value = req.enabled;"\
+                            "if(req.slave_address !== undefined) document.getElementById('dp'+i+'_slave').value = req.slave_address;"\
+                            "if(req.data_type !== undefined) document.getElementById('dp'+i+'_type').value = req.data_type;"\
+                            "if(req.operation !== undefined) document.getElementById('dp'+i+'_op').value = req.operation;"\
+                            "if(req.start_address !== undefined) document.getElementById('dp'+i+'_addr').value = req.start_address;"\
+                            "if(req.count !== undefined) document.getElementById('dp'+i+'_count').value = req.count;"\
+                            "if(req.tag_handles) {"\
                                 "for(var j=0; j<10; j++){"\
                                     "var tagSelect = document.getElementById('dp'+i+'_tag'+j);"\
-                                    "if(tagSelect && dp.tag_handles[j] !== undefined){"\
-                                        "tagSelect.value = dp.tag_handles[j];"\
+                                    "if(tagSelect && req.tag_handles[j] !== undefined){"\
+                                        "tagSelect.value = req.tag_handles[j];"\
                                     "}"\
                                 "}"\
                             "}"\
@@ -122,7 +122,7 @@
             "})"\
             ".catch(function(err){ alert('Error saving settings: ' + err); });"\
     "}"\
-    "function submitDataPointForm(e, form, idx) {"\
+    "function submitRequestForm(e, form, idx) {"\
         "e.preventDefault();"\
         "var formData = new FormData(form);"\
         "var params = new URLSearchParams();"\
@@ -130,10 +130,10 @@
         "fetch(form.action, { method:'POST', body:params })"\
             ".then(function(res){ return res.text(); })"\
             ".then(function(text){"\
-                "alert('Data Point ' + idx + ' saved successfully!');"\
+                "alert('Request ' + idx + ' saved successfully!');"\
                 "loadConfig();"\
             "})"\
-            ".catch(function(err){ alert('Error saving data point: ' + err); });"\
+            ".catch(function(err){ alert('Error saving request: ' + err); });"\
     "}"\
     "function showCreateTagForm() {"\
         "document.getElementById('create-tag-form').style.display = 'block';"\

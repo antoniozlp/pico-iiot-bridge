@@ -38,12 +38,12 @@
 /* Enable flag: modbus_rtu_client_config_t.enable */
 #define MODBUS_RTU_DISABLED         0
 
-/* Note: modbus_rtu_data_point_config_t, enums, and constants are defined in system_config.h */
+/* Note: modbus_rtu_request_config_t, enums, and constants are defined in system_config.h */
 
 /**
- * @brief Modbus RTU data point result (runtime only, not stored)
+ * @brief Modbus RTU request result (runtime only, not stored)
  * 
- * Contains the result of the last read/write operation for a data point.
+ * Contains the result of the last read/write operation for a request.
  * This data lives in RAM and is updated after each poll cycle.
  */
 typedef struct {
@@ -53,14 +53,14 @@ typedef struct {
         uint16_t registers[MODBUS_RTU_MAX_REG_COUNT];  /* For holding/input registers */
         uint8_t coils[MODBUS_RTU_MAX_REG_COUNT];       /* For coils/discrete inputs (0 or 1) */
     } data;
-} modbus_rtu_data_point_result_t;
+} modbus_rtu_request_result_t;
 
-/* Data point configuration (loaded from flash at startup) */
-static modbus_rtu_data_point_config_t s_data_point_configs[MODBUS_RTU_DATA_POINTS_MAX];
-/* Data point results (runtime data, updated each cycle) */
-static modbus_rtu_data_point_result_t s_data_point_results[MODBUS_RTU_DATA_POINTS_MAX];
+/* Request configuration (loaded from flash at startup) */
+static modbus_rtu_request_config_t s_request_configs[MODBUS_RTU_REQUESTS_MAX];
+/* Request results (runtime data, updated each cycle) */
+static modbus_rtu_request_result_t s_request_results[MODBUS_RTU_REQUESTS_MAX];
 /* Mutex to protect access to configs and results */
-static SemaphoreHandle_t s_data_point_mutex = NULL;
+static SemaphoreHandle_t s_request_mutex = NULL;
 
 
 /* UART instance used by transport callbacks (set before task runs) */
@@ -77,14 +77,14 @@ static void modbus_rtu_on_error(void)
 }
 
 /**
- * @brief Load data points configuration from flash
+ * @brief Load requests configuration from flash
  * 
  * Loads the Modbus RTU client configuration from flash storage, which includes
- * all data point configurations. Initializes result structures to zero.
+ * all request configurations. Initializes result structures to zero.
  * 
  * @return true if config loaded successfully, false on error
  */
-static bool modbus_rtu_load_data_points_from_config(void)
+static bool modbus_rtu_load_requests_from_config(void)
 {
     modbus_rtu_client_config_t client_config;
     
@@ -95,55 +95,55 @@ static bool modbus_rtu_load_data_points_from_config(void)
         return false;
     }
     
-    // Copy data points from config to runtime arrays
-    memcpy(s_data_point_configs, client_config.data_points, 
-           sizeof(modbus_rtu_data_point_config_t) * MODBUS_RTU_DATA_POINTS_MAX);
+    // Copy requests from config to runtime arrays
+    memcpy(s_request_configs, client_config.requests, 
+           sizeof(modbus_rtu_request_config_t) * MODBUS_RTU_REQUESTS_MAX);
     
     // Initialize result structures to zero
-    memset(s_data_point_results, 0, sizeof(s_data_point_results));
+    memset(s_request_results, 0, sizeof(s_request_results));
     
-    // Log enabled data points
+    // Log enabled requests
     uint8_t enabled_count = 0;
-    for (uint8_t i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+    for (uint8_t i = 0; i < MODBUS_RTU_REQUESTS_MAX; i++)
     {
-        if (s_data_point_configs[i].enabled)
+        if (s_request_configs[i].enabled)
         {
             enabled_count++;
-            LOG_INFO("Data point %u: slave=%u, type=%u, op=%u, addr=%u, count=%u",
+            LOG_INFO("Request %u: slave=%u, type=%u, op=%u, addr=%u, count=%u",
                      i,
-                     s_data_point_configs[i].slave_address,
-                     s_data_point_configs[i].data_type,
-                     s_data_point_configs[i].operation,
-                     s_data_point_configs[i].start_address,
-                     s_data_point_configs[i].count);
+                     s_request_configs[i].slave_address,
+                     s_request_configs[i].data_type,
+                     s_request_configs[i].operation,
+                     s_request_configs[i].start_address,
+                     s_request_configs[i].count);
         }
     }
     
-    LOG_INFO("Modbus RTU: loaded %u enabled data points from configuration", enabled_count);
+    LOG_INFO("Modbus RTU: loaded %u enabled requests from configuration", enabled_count);
     return true;
 }
 
 /* Forward declarations */
 static void modbus_rtu_map_to_tags(
-    const modbus_rtu_data_point_config_t *config,
-    const modbus_rtu_data_point_result_t *result);
+    const modbus_rtu_request_config_t *config,
+    const modbus_rtu_request_result_t *result);
 static void modbus_rtu_map_from_tags(
-    const modbus_rtu_data_point_config_t *config,
-    modbus_rtu_data_point_result_t *result);
+    const modbus_rtu_request_config_t *config,
+    modbus_rtu_request_result_t *result);
 
 /**
- * @brief Process a single data point
+ * @brief Process a single Modbus request
  * 
  * Reads or writes the specified Modbus registers/coils and stores the result
- * in the data point result structure.
+ * in the request result structure.
  * 
  * @param nmbs      Pointer to nanoMODBUS client instance
- * @param config    Pointer to data point configuration (what to read/write)
- * @param result    Pointer to data point result (where to store data)
+ * @param config    Pointer to request configuration (what to read/write)
+ * @param result    Pointer to request result (where to store data)
  */
-static void modbus_rtu_process_data_point(nmbs_t *nmbs, 
-                                          const modbus_rtu_data_point_config_t *config,
-                                          modbus_rtu_data_point_result_t *result)
+static void modbus_rtu_process_request(nmbs_t *nmbs, 
+                                       const modbus_rtu_request_config_t *config,
+                                       modbus_rtu_request_result_t *result)
 {
     if (nmbs == NULL || config == NULL || result == NULL || !config->enabled)
     {
@@ -293,8 +293,8 @@ static void modbus_rtu_process_data_point(nmbs_t *nmbs,
  * @param result Pointer to data point result (contains register values)
  */
 static void modbus_rtu_map_to_tags(
-    const modbus_rtu_data_point_config_t *config,
-    const modbus_rtu_data_point_result_t *result)
+    const modbus_rtu_request_config_t *config,
+    const modbus_rtu_request_result_t *result)
 {
     if (config == NULL || result == NULL)
     {
@@ -434,8 +434,8 @@ static void modbus_rtu_map_to_tags(
  * @param result Pointer to data point result (buffer to populate for write)
  */
 static void modbus_rtu_map_from_tags(
-    const modbus_rtu_data_point_config_t *config,
-    modbus_rtu_data_point_result_t *result)
+    const modbus_rtu_request_config_t *config,
+    modbus_rtu_request_result_t *result)
 {
     if (config == NULL || result == NULL)
     {
@@ -683,8 +683,8 @@ static void vModbusRtuTask(void *pvParameters)
              serial_config.stopbits);
 
     /* Create mutex for data point access */
-    s_data_point_mutex = xSemaphoreCreateMutex();
-    if (s_data_point_mutex == NULL)
+    s_request_mutex = xSemaphoreCreateMutex();
+    if (s_request_mutex == NULL)
     {
         LOG_ERROR("Failed to create data point mutex - task will exit");
         vTaskDelete(NULL);
@@ -692,11 +692,11 @@ static void vModbusRtuTask(void *pvParameters)
     }
 
     /* Load data points configuration from flash */
-    if (!modbus_rtu_load_data_points_from_config())
+    if (!modbus_rtu_load_requests_from_config())
     {
         LOG_ERROR("Failed to load data points from configuration - task will exit");
-        vSemaphoreDelete(s_data_point_mutex);
-        s_data_point_mutex = NULL;
+        vSemaphoreDelete(s_request_mutex);
+        s_request_mutex = NULL;
         vTaskDelete(NULL);
         return;
     }
@@ -714,8 +714,8 @@ static void vModbusRtuTask(void *pvParameters)
     {
         LOG_ERROR("Failed to create Modbus client: %d - task will exit", err);
         modbus_rtu_on_error();
-        vSemaphoreDelete(s_data_point_mutex);
-        s_data_point_mutex = NULL;
+        vSemaphoreDelete(s_request_mutex);
+        s_request_mutex = NULL;
         vTaskDelete(NULL);
         return;
     }
@@ -731,55 +731,55 @@ static void vModbusRtuTask(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(MODBUS_RTU_TASK_LOOP_DELAY_MS));
 
         /* Take mutex to access data points */
-        if (xSemaphoreTake(s_data_point_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
+        if (xSemaphoreTake(s_request_mutex, pdMS_TO_TICKS(100)) != pdTRUE)
         {
             LOG_WARN("Failed to take data point mutex");
             continue;
         }
 
         /* Process all enabled data points */
-        for (uint8_t i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+        for (uint8_t i = 0; i < MODBUS_RTU_REQUESTS_MAX; i++)
         {
-            if (s_data_point_configs[i].enabled)
+            if (s_request_configs[i].enabled)
             {
-                modbus_rtu_process_data_point(&nmbs, &s_data_point_configs[i], &s_data_point_results[i]);
+                modbus_rtu_process_request(&nmbs, &s_request_configs[i], &s_request_results[i]);
                 
                 /* Log successful reads and writes for debugging */
-                if (s_data_point_results[i].last_error == NMBS_ERROR_NONE)
+                if (s_request_results[i].last_error == NMBS_ERROR_NONE)
                 {
-                    if (s_data_point_configs[i].data_type == MODBUS_DATA_TYPE_HOLDING_REGISTER ||
-                        s_data_point_configs[i].data_type == MODBUS_DATA_TYPE_INPUT_REGISTER)
+                    if (s_request_configs[i].data_type == MODBUS_DATA_TYPE_HOLDING_REGISTER ||
+                        s_request_configs[i].data_type == MODBUS_DATA_TYPE_INPUT_REGISTER)
                     {
-                        LOG_DEBUG("DataPoint[%u]: slave=%u addr=%u %s regs=[%u, %u]",
-                                 i, s_data_point_configs[i].slave_address,
-                                 s_data_point_configs[i].start_address,
-                                 s_data_point_configs[i].operation == MODBUS_OP_READ ? "read" : "write",
-                                 s_data_point_results[i].data.registers[0],
-                                 s_data_point_configs[i].count > 1 ? s_data_point_results[i].data.registers[1] : 0);
+                        LOG_DEBUG("Request[%u]: slave=%u addr=%u %s regs=[%u, %u]",
+                                 i, s_request_configs[i].slave_address,
+                                 s_request_configs[i].start_address,
+                                 s_request_configs[i].operation == MODBUS_OP_READ ? "read" : "write",
+                                 s_request_results[i].data.registers[0],
+                                 s_request_configs[i].count > 1 ? s_request_results[i].data.registers[1] : 0);
                     }
                     else
                     {
-                        LOG_DEBUG("DataPoint[%u]: slave=%u addr=%u %s coils=[%u, %u, %u]",
-                                 i, s_data_point_configs[i].slave_address,
-                                 s_data_point_configs[i].start_address,
-                                 s_data_point_configs[i].operation == MODBUS_OP_READ ? "read" : "write",
-                                 s_data_point_results[i].data.coils[0],
-                                 s_data_point_configs[i].count > 1 ? s_data_point_results[i].data.coils[1] : 0,
-                                 s_data_point_configs[i].count > 2 ? s_data_point_results[i].data.coils[2] : 0);
+                        LOG_DEBUG("Request[%u]: slave=%u addr=%u %s coils=[%u, %u, %u]",
+                                 i, s_request_configs[i].slave_address,
+                                 s_request_configs[i].start_address,
+                                 s_request_configs[i].operation == MODBUS_OP_READ ? "read" : "write",
+                                 s_request_results[i].data.coils[0],
+                                 s_request_configs[i].count > 1 ? s_request_results[i].data.coils[1] : 0,
+                                 s_request_configs[i].count > 2 ? s_request_results[i].data.coils[2] : 0);
                     }
                 }
-                else if (s_data_point_results[i].last_error != NMBS_ERROR_NONE)
+                else if (s_request_results[i].last_error != NMBS_ERROR_NONE)
                 {
                     /* Only log when there is an actual error (read or write failure) */
-                    LOG_ERROR("DataPoint[%u]: slave=%u addr=%u error=%d",
-                             i, s_data_point_configs[i].slave_address,
-                             s_data_point_configs[i].start_address,
-                             s_data_point_results[i].last_error);
+                    LOG_ERROR("Request[%u]: slave=%u addr=%u error=%d",
+                             i, s_request_configs[i].slave_address,
+                             s_request_configs[i].start_address,
+                             s_request_results[i].last_error);
                 }
             }
         }
 
-        xSemaphoreGive(s_data_point_mutex);
+        xSemaphoreGive(s_request_mutex);
     }
 }
 

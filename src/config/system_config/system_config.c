@@ -100,19 +100,19 @@ void config_set_default(void)
     g_sys_cfg.modbus_rtu_client.serial_id = 1;  // Use UART1 by default
     
     // Initialize all data points to disabled
-    for (uint8_t i = 0; i < MODBUS_RTU_DATA_POINTS_MAX; i++)
+    for (uint8_t i = 0; i < MODBUS_RTU_REQUESTS_MAX; i++)
     {
-        g_sys_cfg.modbus_rtu_client.data_points[i].enabled = 0;
-        g_sys_cfg.modbus_rtu_client.data_points[i].slave_address = 1;
-        g_sys_cfg.modbus_rtu_client.data_points[i].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
-        g_sys_cfg.modbus_rtu_client.data_points[i].operation = MODBUS_OP_READ;
-        g_sys_cfg.modbus_rtu_client.data_points[i].start_address = 0;
-        g_sys_cfg.modbus_rtu_client.data_points[i].count = 1;
+        g_sys_cfg.modbus_rtu_client.requests[i].enabled = 0;
+        g_sys_cfg.modbus_rtu_client.requests[i].slave_address = 1;
+        g_sys_cfg.modbus_rtu_client.requests[i].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+        g_sys_cfg.modbus_rtu_client.requests[i].operation = MODBUS_OP_READ;
+        g_sys_cfg.modbus_rtu_client.requests[i].start_address = 0;
+        g_sys_cfg.modbus_rtu_client.requests[i].count = 1;
         
         // Initialize all tag mappings as unmapped
         for (uint8_t j = 0; j < MODBUS_RTU_MAX_REG_COUNT; j++)
         {
-            g_sys_cfg.modbus_rtu_client.data_points[i].tag_handles[j] = MODBUS_TAG_MAP_INVALID;
+            g_sys_cfg.modbus_rtu_client.requests[i].tag_handles[j] = MODBUS_TAG_MAP_INVALID;
         }
     }
 

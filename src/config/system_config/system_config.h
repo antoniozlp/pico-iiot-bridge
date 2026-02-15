@@ -83,13 +83,13 @@ typedef enum {
     MODBUS_OP_WRITE = 1
 } modbus_rtu_operation_t;
 
-// Modbus RTU data point configuration (stored in flash)
-#define MODBUS_RTU_DATA_POINTS_MAX   10     // Maximum data points per client
-#define MODBUS_RTU_MAX_REG_COUNT     10     // Max registers/coils per data point
+// Modbus RTU request configuration (stored in flash)
+#define MODBUS_RTU_REQUESTS_MAX      10     // Maximum requests per client
+#define MODBUS_RTU_MAX_REG_COUNT     10     // Max registers/coils per request
 #define MODBUS_TAG_MAP_INVALID       0xFF   // Tag handle indicating unmapped register
 
 typedef struct {
-    uint8_t enabled;                        // Enable/disable this data point
+    uint8_t enabled;                        // Enable/disable this request
     uint8_t slave_address;                  // Modbus slave address (1-247)
     modbus_rtu_data_type_t data_type;       // Type of data to read/write
     modbus_rtu_operation_t operation;       // Read or write
@@ -99,13 +99,13 @@ typedef struct {
     // Tag mapping: which tag receives which register/coil value
     // MODBUS_TAG_MAP_INVALID (0xFF) = register not mapped to any tag
     uint8_t tag_handles[MODBUS_RTU_MAX_REG_COUNT];
-} modbus_rtu_data_point_config_t;
+} modbus_rtu_request_config_t;
 
 // Modbus RTU client configuration
 typedef struct {
 	uint8_t enable;                         // Enable/disable Modbus RTU client
 	uint8_t serial_id;                      // UART to use: 0=UART0, 1=UART1
-    modbus_rtu_data_point_config_t data_points[MODBUS_RTU_DATA_POINTS_MAX];
+    modbus_rtu_request_config_t requests[MODBUS_RTU_REQUESTS_MAX];
 } modbus_rtu_client_config_t;
 
 // ============================================================================
