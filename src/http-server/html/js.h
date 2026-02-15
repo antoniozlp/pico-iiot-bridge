@@ -89,7 +89,12 @@
                     "}"\
                 "}"\
             "})"\
-            ".catch(function(err) { console.log('Error fetching config: ', err); });"\
+            ".catch(function(err) {"\
+                "console.log('Error fetching config: ', err);"\
+                "if(err.message && err.message.indexOf('Failed to fetch') >= 0){"\
+                    "console.warn('Ensure you access this page from the device: http://<device-ip>/');"\
+                "}"\
+            "});"\
     "}"\
     "function submitForm(e, form) {"\
         "e.preventDefault();"\
@@ -216,7 +221,7 @@
             ".catch(function(err){ console.log('Error fetching tags: ', err); });"\
     "}"\
     "function loadTagsForMapping() {"\
-        "fetch('get_tags.cgi')"\
+        "return fetch('get_tags.cgi')"\
             ".then(function(res){ return res.json(); })"\
             ".then(function(data){"\
                 "if(data.tags && data.tags.length > 0){"\
@@ -229,19 +234,22 @@
                                 "data.tags.forEach(function(tag){"\
                                     "var opt = document.createElement('option');"\
                                     "opt.value = tag.handle;"\
-                                    "opt.textContent = tag.name + ' (' + typeNames[tag.type] + ')';"\
+                                    "opt.textContent = tag.name + ' (' + (typeNames[tag.type] || '?') + ')';"\
                                     "select.appendChild(opt);"\
                                 "});"\
                             "}"\
                         "}"\
                     "}"\
                 "}"\
+                "return data;"\
             "})"\
-            ".catch(function(err){ console.log('Error loading tags for mapping: ', err); });"\
+            ".catch(function(err){ console.log('Error loading tags for mapping: ', err); return {}; });"\
     "}"\
     "document.addEventListener('DOMContentLoaded', function(){"\
-        "loadConfig();"\
-        "loadTagsForMapping();"\
+        "if(window.location.protocol === 'file:'){"\
+            "console.warn('Page loaded from file - fetch will fail. Access from device: http://<device-ip>/');"\
+        "}"\
+        "loadTagsForMapping().then(function(){ loadConfig(); });"\
         "setInterval(refreshTags, 2000);"\
     "});"\
     "</script>"
