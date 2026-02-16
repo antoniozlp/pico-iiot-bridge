@@ -25,6 +25,15 @@
         "var mode = document.getElementById('s2tcp_mode').value;"\
         "document.getElementById('client-fields').style.display = (mode == '1') ? 'block' : 'none';"\
     "}"\
+    "function rebootToApply() {"\
+        "if(!confirm('Reboot device now to apply configuration changes?')) return;"\
+        "fetch('reboot.cgi', { method:'POST', body:new URLSearchParams() })"\
+            ".then(function(res){ return res.text(); })"\
+            ".then(function(text){"\
+                "alert('Device rebooting...');"\
+            "})"\
+            ".catch(function(err){ alert('Reboot request sent. Device may already be restarting.'); });"\
+    "}"\
     "function loadConfig() {"\
         "fetch('get_config.cgi')"\
             ".then(function(response) { return response.json(); })"\

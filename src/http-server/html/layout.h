@@ -21,6 +21,9 @@
         "<div class=\"menu-item\" onclick=\"showPage('s2tcp')\">Serial to TCP</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('modbus')\">Modbus RTU</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('tags')\">Tag Database</div>"\
+        "<div class=\"sidebar-footer\">"\
+            "<button class=\"reboot-btn\" onclick=\"rebootToApply()\">Reboot to Apply</button>"\
+        "</div>"\
     "</div>"
 
 #define HTML_CONTENT_START \
