@@ -7,6 +7,7 @@
 #include "hardware/uart.h"
 #include "hardware/flash.h"
 #include "logger.h"
+#include "modbus_request.h"
 
 // Flash configuration
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
@@ -69,43 +70,11 @@ typedef struct
 	uint16_t remote_port;      // Remote server port
 } serial_to_tcp_mode_config_t;
 
-// Modbus data types
-typedef enum {
-    MODBUS_DATA_TYPE_COIL = 0,              // Discrete output coils (read/write, 1 bit)
-    MODBUS_DATA_TYPE_DISCRETE_INPUT = 1,    // Discrete inputs (read-only, 1 bit)
-    MODBUS_DATA_TYPE_INPUT_REGISTER = 2,    // Input registers (read-only, 16 bit)
-    MODBUS_DATA_TYPE_HOLDING_REGISTER = 3   // Holding registers (read/write, 16 bit)
-} modbus_rtu_data_type_t;
-
-// Modbus operation type
-typedef enum {
-    MODBUS_OP_READ = 0,
-    MODBUS_OP_WRITE = 1
-} modbus_rtu_operation_t;
-
-// Modbus RTU request configuration (stored in flash)
-#define MODBUS_RTU_REQUESTS_MAX      10     // Maximum requests per client
-#define MODBUS_RTU_MAX_REG_COUNT     10     // Max registers/coils per request
-#define MODBUS_TAG_MAP_INVALID       0xFF   // Tag handle indicating unmapped register
-
-typedef struct {
-    uint8_t enabled;                        // Enable/disable this request
-    uint8_t slave_address;                  // Modbus slave address (1-247)
-    modbus_rtu_data_type_t data_type;       // Type of data to read/write
-    modbus_rtu_operation_t operation;       // Read or write
-    uint16_t start_address;                 // Starting register/coil address
-    uint16_t count;                         // Number of registers/coils
-    
-    // Tag mapping: which tag receives which register/coil value
-    // MODBUS_TAG_MAP_INVALID (0xFF) = register not mapped to any tag
-    uint8_t tag_handles[MODBUS_RTU_MAX_REG_COUNT];
-} modbus_rtu_request_config_t;
-
-// Modbus RTU client configuration
+// Modbus RTU client configuration (uses modbus_request_config_t from modbus_request.h)
 typedef struct {
 	uint8_t enable;                         // Enable/disable Modbus RTU client
 	uint8_t serial_id;                      // UART to use: 0=UART0, 1=UART1
-    modbus_rtu_request_config_t requests[MODBUS_RTU_REQUESTS_MAX];
+    modbus_request_config_t requests[MODBUS_REQUESTS_MAX];
 } modbus_rtu_client_config_t;
 
 // ============================================================================

@@ -6,6 +6,8 @@ target_sources(system_config INTERFACE
 
 target_include_directories(system_config INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_SOURCE_DIR}/src/modbus
+    ${CMAKE_SOURCE_DIR}/lib/nanoMODBUS
 )
 
 target_link_libraries(system_config INTERFACE

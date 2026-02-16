@@ -505,7 +505,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 	if((param = get_http_param_value((char *)uri, "dp_idx")))
 	{
 		dp_idx = ATOI(param, 10);
-		if (dp_idx < 0 || dp_idx >= MODBUS_RTU_REQUESTS_MAX)
+		if (dp_idx < 0 || dp_idx >= MODBUS_REQUESTS_MAX)
 		{
 			LOG_ERROR("Invalid request index %d", dp_idx);
 			return HTTP_FAILED;
@@ -524,7 +524,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		return HTTP_FAILED;
 	}
 
-	modbus_rtu_request_config_t *req = &client_config.requests[dp_idx];
+	modbus_request_config_t *req = &client_config.requests[dp_idx];
 
 	if((param = get_http_param_value((char *)uri, "enabled")))
 	{
@@ -548,7 +548,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val >= 0 && val <= 3)
 		{
-			req->data_type = (modbus_rtu_data_type_t)val;
+			req->data_type = (modbus_data_type_t)val;
 			changed = 1;
 		}
 	}
@@ -558,7 +558,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		int val = ATOI(param, 10);
 		if (val == 0 || val == 1)
 		{
-			req->operation = (modbus_rtu_operation_t)val;
+			req->operation = (modbus_operation_t)val;
 			changed = 1;
 		}
 	}
@@ -576,7 +576,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 	if((param = get_http_param_value((char *)uri, "count")))
 	{
 		int val = ATOI(param, 10);
-		if (val >= 1 && val <= MODBUS_RTU_MAX_REG_COUNT)
+		if (val >= 1 && val <= MODBUS_MAX_REG_COUNT)
 		{
 			req->count = (uint16_t)val;
 			changed = 1;
@@ -584,7 +584,7 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 	}
 
 	// Parse tag mappings (tag0 through tag9)
-	for (uint8_t i = 0; i < MODBUS_RTU_MAX_REG_COUNT; i++)
+	for (uint8_t i = 0; i < MODBUS_MAX_REG_COUNT; i++)
 	{
 		char param_name[8];
 		snprintf(param_name, sizeof(param_name), "tag%d", i);
@@ -1023,7 +1023,7 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 					   (unsigned int)modbus_config.serial_id);
 		
 		// Append requests array
-		for (int i = 0; i < MODBUS_RTU_REQUESTS_MAX; i++)
+		for (int i = 0; i < MODBUS_REQUESTS_MAX; i++)
 		{
 			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"tag_handles\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]}",
 							i > 0 ? "," : "",
