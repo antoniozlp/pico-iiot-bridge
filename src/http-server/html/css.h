@@ -9,6 +9,9 @@
     ".menu-item{padding:12px;cursor:pointer;border-radius:6px;color:#555;margin-bottom:4px;}"\
     ".menu-item:hover{background:#f0f2f5;}"\
     ".menu-item.active{background:#e6f0ff;color:#1d78ff;font-weight:600;}"\
+    ".sidebar-footer{margin-top:auto;padding-top:16px;}"\
+    ".reboot-btn{width:100%;margin-top:0;background:#d9534f;}"\
+    ".reboot-btn:hover{background:#c9302c;}"\
     ".content{flex:1;padding:32px;overflow-y:auto;}"\
     "h1{margin:0 0 8px;font-size:24px;}"\
     "h3{margin:24px 0 8px;font-size:18px;color:#555;}"\
