@@ -12,6 +12,63 @@
 #include "logger.h"
 #include "tag_database.h"
 
+/* Swap bytes within a 16-bit register */
+static inline uint16_t swap16(uint16_t x)
+{
+    return (uint16_t)(((x >> 8) & 0xFF) | ((x & 0xFF) << 8));
+}
+
+/**
+ * @brief Decode two registers to uint32 based on encoding
+ */
+static uint32_t decode_uint32(uint16_t reg0, uint16_t reg1, modbus_register_encoding_t enc)
+{
+    switch (enc)
+    {
+        case MODBUS_ENCODING_ABCD:
+            return ((uint32_t)reg0 << 16) | reg1;
+        case MODBUS_ENCODING_BADC:
+            return ((uint32_t)reg1 << 16) | reg0;
+        case MODBUS_ENCODING_CDAB:
+            return ((uint32_t)swap16(reg0) << 16) | swap16(reg1);
+        case MODBUS_ENCODING_DCBA:
+            return ((uint32_t)swap16(reg1) << 16) | swap16(reg0);
+        default:
+            return ((uint32_t)reg0 << 16) | reg1;
+    }
+}
+
+/**
+ * @brief Encode uint32 to two registers based on encoding
+ */
+static void encode_uint32(uint32_t value, uint16_t *reg0, uint16_t *reg1,
+                         modbus_register_encoding_t enc)
+{
+    switch (enc)
+    {
+        case MODBUS_ENCODING_ABCD:
+            *reg0 = (uint16_t)(value >> 16);
+            *reg1 = (uint16_t)(value & 0xFFFF);
+            break;
+        case MODBUS_ENCODING_BADC:
+            *reg0 = (uint16_t)(value & 0xFFFF);
+            *reg1 = (uint16_t)(value >> 16);
+            break;
+        case MODBUS_ENCODING_CDAB:
+            *reg0 = swap16((uint16_t)(value >> 16));
+            *reg1 = swap16((uint16_t)(value & 0xFFFF));
+            break;
+        case MODBUS_ENCODING_DCBA:
+            *reg0 = swap16((uint16_t)(value & 0xFFFF));
+            *reg1 = swap16((uint16_t)(value >> 16));
+            break;
+        default:
+            *reg0 = (uint16_t)(value >> 16);
+            *reg1 = (uint16_t)(value & 0xFFFF);
+            break;
+    }
+}
+
 /**
  * @brief Map Modbus register/coil data to tags (after successful read)
  */
@@ -122,8 +179,9 @@ void modbus_map_to_tags(const modbus_request_config_t *config,
                 case TAG_TYPE_INT32:
                     if (reg_idx + 1 < config->count)
                     {
-                        value.u32_val = ((uint32_t)result->data.registers[reg_idx] << 16) |
-                                        result->data.registers[reg_idx + 1];
+                        value.u32_val = decode_uint32(result->data.registers[reg_idx],
+                                                     result->data.registers[reg_idx + 1],
+                                                     config->encoding);
                         write_ok = true;
                         regs_consumed = 2;
                     }
@@ -137,8 +195,9 @@ void modbus_map_to_tags(const modbus_request_config_t *config,
                 case TAG_TYPE_FLOAT:
                     if (reg_idx + 1 < config->count)
                     {
-                        uint32_t raw = ((uint32_t)result->data.registers[reg_idx] << 16) |
-                                       result->data.registers[reg_idx + 1];
+                        uint32_t raw = decode_uint32(result->data.registers[reg_idx],
+                                                    result->data.registers[reg_idx + 1],
+                                                    config->encoding);
                         memcpy(&value.float_val, &raw, sizeof(float));
                         write_ok = true;
                         regs_consumed = 2;
@@ -261,13 +320,19 @@ void modbus_map_from_tags(const modbus_request_config_t *config,
                 case TAG_TYPE_INT32:
                     if (i + 1 < config->count)
                     {
-                        result->data.registers[i] = (uint16_t)(value.u32_val >> 16);
-                        result->data.registers[i + 1] = (uint16_t)(value.u32_val & 0xFFFF);
+                        encode_uint32(value.u32_val,
+                                      &result->data.registers[i],
+                                      &result->data.registers[i + 1],
+                                      config->encoding);
                         prev_consumed_2regs = true;
                     }
                     else
                     {
-                        result->data.registers[i] = (uint16_t)(value.u32_val & 0xFFFF);
+                        uint16_t r0, r1;
+                        encode_uint32(value.u32_val, &r0, &r1, config->encoding);
+                        /* Low word is in r1 for ABCD/CDAB, r0 for BADC/DCBA */
+                        result->data.registers[i] = (config->encoding == MODBUS_ENCODING_BADC ||
+                                                    config->encoding == MODBUS_ENCODING_DCBA) ? r0 : r1;
                         LOG_WARN("Tag %s (32-bit) truncated: only 1 register available", metadata.name);
                     }
                     break;
@@ -277,15 +342,20 @@ void modbus_map_from_tags(const modbus_request_config_t *config,
                     {
                         uint32_t raw;
                         memcpy(&raw, &value.float_val, sizeof(float));
-                        result->data.registers[i] = (uint16_t)(raw >> 16);
-                        result->data.registers[i + 1] = (uint16_t)(raw & 0xFFFF);
+                        encode_uint32(raw,
+                                     &result->data.registers[i],
+                                     &result->data.registers[i + 1],
+                                     config->encoding);
                         prev_consumed_2regs = true;
                     }
                     else
                     {
                         uint32_t raw;
                         memcpy(&raw, &value.float_val, sizeof(float));
-                        result->data.registers[i] = (uint16_t)(raw & 0xFFFF);
+                        uint16_t r0, r1;
+                        encode_uint32(raw, &r0, &r1, config->encoding);
+                        result->data.registers[i] = (config->encoding == MODBUS_ENCODING_BADC ||
+                                                     config->encoding == MODBUS_ENCODING_DCBA) ? r0 : r1;
                         LOG_WARN("Tag %s (float) truncated: only 1 register available", metadata.name);
                     }
                     break;

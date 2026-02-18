@@ -27,6 +27,25 @@ typedef enum {
     MODBUS_OP_WRITE = 1
 } modbus_operation_t;
 
+/**
+ * @brief 32-bit register encoding (word/byte order)
+ *
+ * Two registers form a 32-bit value. Vendors differ in:
+ * - Word order: high word first (AB|CD) vs low word first (CD|AB)
+ * - Byte order within each 16-bit register: big-endian (AB) vs little-endian (BA)
+ *
+ * ABCD = big-endian (high word first, high byte first in each word)
+ * BADC = word swap (low word first)
+ * CDAB = byte swap within each word
+ * DCBA = word swap + byte swap
+ */
+typedef enum {
+    MODBUS_ENCODING_ABCD = 0,   /* Reg0=high word, Reg1=low word (default, big-endian) */
+    MODBUS_ENCODING_BADC = 1,   /* Reg0=low word, Reg1=high word (word swap) */
+    MODBUS_ENCODING_CDAB = 2,   /* Byte swap within each register */
+    MODBUS_ENCODING_DCBA = 3    /* Word swap + byte swap */
+} modbus_register_encoding_t;
+
 /* Request limits (shared by RTU and TCP) */
 #define MODBUS_REQUESTS_MAX      10     /* Maximum requests per client */
 #define MODBUS_MAX_REG_COUNT     10     /* Max registers/coils per request */
@@ -44,6 +63,7 @@ typedef struct {
     modbus_operation_t operation;           /* Read or write */
     uint16_t start_address;                 /* Starting register/coil address */
     uint16_t count;                         /* Number of registers/coils */
+    modbus_register_encoding_t encoding;   /* 32-bit word/byte order (ABCD default) */
 
     /* Tag mapping: which tag receives which register/coil value */
     /* MODBUS_TAG_MAP_INVALID (0xFF) = register not mapped to any tag */

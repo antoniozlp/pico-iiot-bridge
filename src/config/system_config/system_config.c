@@ -108,6 +108,7 @@ void config_set_default(void)
         g_sys_cfg.modbus_rtu_client.requests[i].operation = MODBUS_OP_READ;
         g_sys_cfg.modbus_rtu_client.requests[i].start_address = 0;
         g_sys_cfg.modbus_rtu_client.requests[i].count = 1;
+        g_sys_cfg.modbus_rtu_client.requests[i].encoding = MODBUS_ENCODING_ABCD;
         
         // Initialize all tag mappings as unmapped
         for (uint8_t j = 0; j < MODBUS_MAX_REG_COUNT; j++)

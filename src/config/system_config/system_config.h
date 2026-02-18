@@ -13,7 +13,7 @@
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
 // In debugger Memory view use: 0x101F0000 (XIP_BASE + FLASH_TARGET_OFFSET)
 #define CONFIG_VERSION_MAJOR 0
-#define CONFIG_VERSION_MINOR 2  // Incremented for tag mapping and handle stability
+#define CONFIG_VERSION_MINOR 1  // Incremented for 32-bit encoding (ABCD/BADC/CDAB/DCBA)
 #define CONFIG_VERSION_PATCH 0
 
 // ============================================================================
