@@ -584,6 +584,16 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 		}
 	}
 
+	if((param = get_http_param_value((char *)uri, "encoding")))
+	{
+		int val = ATOI(param, 10);
+		if (val >= 0 && val <= 3)
+		{
+			req->encoding = (modbus_register_encoding_t)val;
+			changed = 1;
+		}
+	}
+
 	// Parse tag mappings (tag0 through tag9)
 	for (uint8_t i = 0; i < MODBUS_MAX_REG_COUNT; i++)
 	{
@@ -986,96 +996,112 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 		return handle_get_tags(buf, len);
 	}
 	
-	if(strcmp((const char *)uri_name, "get_config.cgi") == 0)
+	if(strcmp((const char *)uri_name, "get_network.cgi") == 0)
 	{
 		wiz_NetInfo net_info;
-		serial_config_t serial0_config;
-		serial_config_t serial1_config;
-		serial_to_tcp_mode_config_t s2tcp_config;
-		modbus_rtu_client_config_t modbus_config;
-		
-		// Get all configuration using the API
-		if (!config_get_net_info(&net_info) ||
-			!config_get_serial_config(0, &serial0_config) ||
-			!config_get_serial_config(1, &serial1_config) ||
-			!config_get_serial_to_tcp_mode(&s2tcp_config) ||
-			!config_get_modbus_rtu_client_config(&modbus_config))
+		if (!config_get_net_info(&net_info))
 		{
-			LOG_ERROR("Failed to get configuration");
 			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
 			return HTTP_FAILED;
 		}
-		
-		// Convert parity enum to string for both serial ports
+		*len = sprintf((char *)buf,
+			"{\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"ip\":\"%d.%d.%d.%d\",\"sn\":\"%d.%d.%d.%d\",\"gw\":\"%d.%d.%d.%d\",\"dns\":\"%d.%d.%d.%d\",\"dhcp\":%d}",
+			net_info.mac[0], net_info.mac[1], net_info.mac[2], net_info.mac[3], net_info.mac[4], net_info.mac[5],
+			net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
+			net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3],
+			net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3],
+			net_info.dns[0], net_info.dns[1], net_info.dns[2], net_info.dns[3],
+			net_info.dhcp);
+		return HTTP_OK;
+	}
+	
+	if(strcmp((const char *)uri_name, "get_serial.cgi") == 0)
+	{
+		serial_config_t serial0_config;
+		serial_config_t serial1_config;
+		if (!config_get_serial_config(0, &serial0_config) || !config_get_serial_config(1, &serial1_config))
+		{
+			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
+			return HTTP_FAILED;
+		}
 		const char *parity0_str = serial0_config.parity == UART_PARITY_NONE ? "none" :
 								  serial0_config.parity == UART_PARITY_EVEN ? "even" : "odd";
 		const char *parity1_str = serial1_config.parity == UART_PARITY_NONE ? "none" :
 								  serial1_config.parity == UART_PARITY_EVEN ? "even" : "odd";
-		
-		// Build base JSON
 		*len = sprintf((char *)buf,
-					   "{\"net\":{\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\",\"ip\":\"%d.%d.%d.%d\",\"sn\":\"%d.%d.%d.%d\",\"gw\":\"%d.%d.%d.%d\",\"dns\":\"%d.%d.%d.%d\",\"dhcp\":%d},"
-					   "\"serial0\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},"
-					   "\"serial1\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},"
-					   "\"s2tcp\":{\"enable\":%d,\"serial\":%u,\"mode\":%d,\"lport\":%u,\"timeout\":%u,\"keepalive\":%u,\"maxconn\":%u,\"remoteip\":\"%d.%d.%d.%d\",\"remoteport\":%u},"
-					   "\"modbus\":{\"enable\":%d,\"serial_id\":%u,\"requests\":[",
-					   net_info.mac[0], net_info.mac[1], net_info.mac[2], net_info.mac[3], net_info.mac[4], net_info.mac[5],
-					   net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
-					   net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3],
-					   net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3],
-					   net_info.dns[0], net_info.dns[1], net_info.dns[2], net_info.dns[3],
-					   net_info.dhcp,
-					   (unsigned long)serial0_config.baud,
-					   (unsigned int)serial0_config.databits,
-					   parity0_str,
-					   (unsigned int)serial0_config.stopbits,
-					   serial0_config.flow_control_cts ? 1 : 0,
-					   serial0_config.flow_control_rts ? 1 : 0,
-					   (unsigned long)serial1_config.baud,
-					   (unsigned int)serial1_config.databits,
-					   parity1_str,
-					   (unsigned int)serial1_config.stopbits,
-					   serial1_config.flow_control_cts ? 1 : 0,
-					   serial1_config.flow_control_rts ? 1 : 0,
-					   s2tcp_config.enable ? 1 : 0,
-					   (unsigned int)s2tcp_config.serial_id,
-					   s2tcp_config.mode,
-					   (unsigned int)s2tcp_config.local_port,
-					   (unsigned int)s2tcp_config.timeout_s,
-					   (unsigned int)s2tcp_config.keepalive_s,
-					   (unsigned int)s2tcp_config.max_connections,
-					   s2tcp_config.remote_ip[0], s2tcp_config.remote_ip[1], 
-					   s2tcp_config.remote_ip[2], s2tcp_config.remote_ip[3],
-					   (unsigned int)s2tcp_config.remote_port,
-					   modbus_config.enable ? 1 : 0,
-					   (unsigned int)modbus_config.serial_id);
-		
-		// Append requests array
+			"{\"serial0\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d},\"serial1\":{\"baud\":%lu,\"databits\":%u,\"parity\":\"%s\",\"stopbits\":%u,\"flowcts\":%d,\"flowrts\":%d}}",
+			(unsigned long)serial0_config.baud,
+			(unsigned int)serial0_config.databits,
+			parity0_str,
+			(unsigned int)serial0_config.stopbits,
+			serial0_config.flow_control_cts ? 1 : 0,
+			serial0_config.flow_control_rts ? 1 : 0,
+			(unsigned long)serial1_config.baud,
+			(unsigned int)serial1_config.databits,
+			parity1_str,
+			(unsigned int)serial1_config.stopbits,
+			serial1_config.flow_control_cts ? 1 : 0,
+			serial1_config.flow_control_rts ? 1 : 0);
+		return HTTP_OK;
+	}
+	
+	if(strcmp((const char *)uri_name, "get_s2tcp.cgi") == 0)
+	{
+		serial_to_tcp_mode_config_t s2tcp_config;
+		if (!config_get_serial_to_tcp_mode(&s2tcp_config))
+		{
+			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
+			return HTTP_FAILED;
+		}
+		*len = sprintf((char *)buf,
+			"{\"enable\":%d,\"serial\":%u,\"mode\":%d,\"lport\":%u,\"timeout\":%u,\"keepalive\":%u,\"maxconn\":%u,\"remoteip\":\"%d.%d.%d.%d\",\"remoteport\":%u}",
+			s2tcp_config.enable ? 1 : 0,
+			(unsigned int)s2tcp_config.serial_id,
+			s2tcp_config.mode,
+			(unsigned int)s2tcp_config.local_port,
+			(unsigned int)s2tcp_config.timeout_s,
+			(unsigned int)s2tcp_config.keepalive_s,
+			(unsigned int)s2tcp_config.max_connections,
+			s2tcp_config.remote_ip[0], s2tcp_config.remote_ip[1],
+			s2tcp_config.remote_ip[2], s2tcp_config.remote_ip[3],
+			(unsigned int)s2tcp_config.remote_port);
+		return HTTP_OK;
+	}
+	
+	if(strcmp((const char *)uri_name, "get_modbus.cgi") == 0)
+	{
+		modbus_rtu_client_config_t modbus_config;
+		if (!config_get_modbus_rtu_client_config(&modbus_config))
+		{
+			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
+			return HTTP_FAILED;
+		}
+		*len = sprintf((char *)buf, "{\"enable\":%d,\"serial_id\":%u,\"requests\":[",
+			modbus_config.enable ? 1 : 0,
+			(unsigned int)modbus_config.serial_id);
 		for (int i = 0; i < MODBUS_REQUESTS_MAX; i++)
 		{
-			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"tag_handles\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]}",
-							i > 0 ? "," : "",
-							modbus_config.requests[i].enabled ? 1 : 0,
-							(unsigned int)modbus_config.requests[i].slave_address,
-							modbus_config.requests[i].data_type,
-							modbus_config.requests[i].operation,
-							(unsigned int)modbus_config.requests[i].start_address,
-							(unsigned int)modbus_config.requests[i].count,
-							modbus_config.requests[i].tag_handles[0],
-							modbus_config.requests[i].tag_handles[1],
-							modbus_config.requests[i].tag_handles[2],
-							modbus_config.requests[i].tag_handles[3],
-							modbus_config.requests[i].tag_handles[4],
-							modbus_config.requests[i].tag_handles[5],
-							modbus_config.requests[i].tag_handles[6],
-							modbus_config.requests[i].tag_handles[7],
-							modbus_config.requests[i].tag_handles[8],
-							modbus_config.requests[i].tag_handles[9]);
+			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"encoding\":%d,\"tag_handles\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]}",
+				i > 0 ? "," : "",
+				modbus_config.requests[i].enabled ? 1 : 0,
+				(unsigned int)modbus_config.requests[i].slave_address,
+				modbus_config.requests[i].data_type,
+				modbus_config.requests[i].operation,
+				(unsigned int)modbus_config.requests[i].start_address,
+				(unsigned int)modbus_config.requests[i].count,
+				modbus_config.requests[i].encoding,
+				modbus_config.requests[i].tag_handles[0],
+				modbus_config.requests[i].tag_handles[1],
+				modbus_config.requests[i].tag_handles[2],
+				modbus_config.requests[i].tag_handles[3],
+				modbus_config.requests[i].tag_handles[4],
+				modbus_config.requests[i].tag_handles[5],
+				modbus_config.requests[i].tag_handles[6],
+				modbus_config.requests[i].tag_handles[7],
+				modbus_config.requests[i].tag_handles[8],
+				modbus_config.requests[i].tag_handles[9]);
 		}
-		
-		// Close JSON
-		*len += sprintf((char *)buf + *len, "]}}");
-		
+		*len += sprintf((char *)buf + *len, "]}");
 		return HTTP_OK;
 	}
 

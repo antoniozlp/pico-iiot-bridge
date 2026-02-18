@@ -47,7 +47,8 @@ uint8_t http_post_cgi_handler(uint8_t * uri_name, st_http_request * p_http_reque
 /**
  * @brief Process predefined GET CGI requests
  * 
- * Handles GET requests for configuration data (get_config.cgi).
+ * Handles GET requests for configuration data (get_network.cgi, get_serial.cgi,
+ * get_s2tcp.cgi, get_modbus.cgi, get_tags.cgi).
  * 
  * @param uri_name Name of the CGI resource
  * @param buf Buffer to write response data

@@ -55,6 +55,7 @@
             "<div><label for=\"dp0_op\">Operation</label><select id=\"dp0_op\" name=\"operation\"><option value=\"0\">Read</option><option value=\"1\">Write</option></select></div></div>"\
             "<div class=\"row\"><div><label for=\"dp0_addr\">Start Address</label><input id=\"dp0_addr\" name=\"start_address\" type=\"number\" min=\"0\" max=\"65535\" value=\"0\"></div>"\
             "<div><label for=\"dp0_count\">Count (1-10)</label><input id=\"dp0_count\" name=\"count\" type=\"number\" min=\"1\" max=\"10\" value=\"1\"></div></div>"\
+            "<div class=\"row\"><div><label for=\"dp0_encoding\">32-bit Encoding</label><select id=\"dp0_encoding\" name=\"encoding\"><option value=\"0\">ABCD (big-endian)</option><option value=\"1\">BADC (word swap)</option><option value=\"2\">CDAB (byte swap)</option><option value=\"3\">DCBA (word+byte swap)</option></select></div></div>"\
             "<div style=\"margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;\">"\
                 "<label style=\"font-weight: bold; display: block; margin-bottom: 8px;\">Tag Mapping (map registers to tags):</label>"\
                 "<div class=\"row\">"\
@@ -134,6 +135,17 @@
             "<div>"\
                 "<label for=\"dp" #N "_count\">Count (1-10)</label>"\
                 "<input id=\"dp" #N "_count\" name=\"count\" type=\"number\" min=\"1\" max=\"10\" value=\"1\">"\
+            "</div>"\
+        "</div>"\
+        "<div class=\"row\">"\
+            "<div>"\
+                "<label for=\"dp" #N "_encoding\">32-bit Encoding</label>"\
+                "<select id=\"dp" #N "_encoding\" name=\"encoding\">"\
+                    "<option value=\"0\">ABCD (big-endian)</option>"\
+                    "<option value=\"1\">BADC (word swap)</option>"\
+                    "<option value=\"2\">CDAB (byte swap)</option>"\
+                    "<option value=\"3\">DCBA (word+byte swap)</option>"\
+                "</select>"\
             "</div>"\
         "</div>"\
         "<div style=\"margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px;\">"\
