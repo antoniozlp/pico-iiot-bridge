@@ -66,6 +66,7 @@ static logger_config_t s_config = {
     .use_colors = true
 };
 static bool s_logger_initialized = false;
+static logger_cli_redraw_cb_t s_cli_redraw_cb = NULL;
 
 /**
  * @brief Get log level name string
@@ -130,6 +131,12 @@ static void vLoggerTask(void *pvParameters)
             // Use a timeout to prevent deadlock if mutex holder crashes
             if (xSemaphoreTake(s_stdio_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
             {
+                // Erase the current terminal line so any partially-typed CLI
+                // input disappears before the log message is printed.
+                // \r   – move cursor to column 0
+                // \033[2K – erase the entire line
+                printf("\r\033[2K");
+
                 // Build the log line
                 const char *color = get_level_color(msg.level);
                 const char *reset = s_config.use_colors ? ANSI_COLOR_RESET : "";
@@ -153,6 +160,13 @@ static void vLoggerTask(void *pvParameters)
                 
                 // Print the actual message
                 printf("%s\n", msg.message);
+
+                // Repaint the CLI prompt and any partially-typed input so the
+                // user can continue typing without interruption.
+                if (s_cli_redraw_cb != NULL)
+                {
+                    s_cli_redraw_cb();
+                }
                 
                 // Release mutex
                 xSemaphoreGive(s_stdio_mutex);
@@ -261,6 +275,14 @@ void logger_set_timestamp(bool enable)
 void logger_set_task_name(bool enable)
 {
     s_config.include_task_name = enable;
+}
+
+/**
+ * @brief Register a callback to redraw the CLI prompt after each log line
+ */
+void logger_set_cli_redraw_callback(logger_cli_redraw_cb_t cb)
+{
+    s_cli_redraw_cb = cb;
 }
 
 /**

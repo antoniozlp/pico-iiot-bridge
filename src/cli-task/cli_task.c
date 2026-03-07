@@ -38,6 +38,30 @@
 static char s_input_buffer[MAX_INPUT_LENGTH];
 static char s_output_buffer[MAX_OUTPUT_LENGTH];
 
+// Tracks how many characters the user has typed on the current input line.
+// File-scope so cli_redraw_input() can read it from the logger callback.
+static int s_input_index = 0;
+
+// Set to true once the CLI has printed its first prompt and is ready to
+// accept input.  The logger redraw callback uses this to decide whether to
+// repaint the prompt line after a log message.
+static bool s_prompt_active = false;
+
+/**
+ * @brief Reprint the CLI prompt and the characters typed so far.
+ *
+ * Called by the logger task (while holding the stdio mutex) after each log
+ * line so the prompt always stays at the bottom of the terminal output.
+ * Must only use printf/putchar – must not call any logger functions.
+ */
+static void cli_redraw_input(void)
+{
+    if (s_prompt_active)
+    {
+        printf("> %.*s", s_input_index, s_input_buffer);
+    }
+}
+
 /**
  * @brief CLI Task
  * 
@@ -48,13 +72,23 @@ static void vCLITask(void *pvParameters)
 {
     (void) pvParameters;
     int rxed_char;
-    int input_index = 0;
     BaseType_t more_data_to_follow;
     
     int poll_delay_ms = POLL_SLOW_MS;  // Start with slow polling
     int idle_counter = 0;
 
     LOG_INFO("FreeRTOS CLI task started. Type 'help' to view a list of registered commands.");
+
+    // Give the logger task a moment to flush the startup INFO message so the
+    // initial prompt appears below it rather than mixed with it.
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    {
+        bool locked = logger_lock_stdio();
+        printf("> ");
+        s_prompt_active = true;
+        if (locked) logger_unlock_stdio();
+    }
 
     while (1)
     {
@@ -70,10 +104,10 @@ static void vCLITask(void *pvParameters)
             printf("\n");
 
             // Process command only if buffer is not empty
-            if (input_index > 0)
+            if (s_input_index > 0)
             {
                 // Terminate the string
-                s_input_buffer[input_index] = '\0';
+                s_input_buffer[s_input_index] = '\0';
 
                 // Process the command
                 do
@@ -83,11 +117,12 @@ static void vCLITask(void *pvParameters)
                 } while (more_data_to_follow != pdFALSE);
 
                 // Clear input buffer
-                input_index = 0;
+                s_input_index = 0;
                 memset(s_input_buffer, 0, MAX_INPUT_LENGTH);
             }
 
             printf("\n> ");
+            s_prompt_active = true;
             
             // Unlock stdio - logger can now print again
             if (locked) {
@@ -116,18 +151,18 @@ static void vCLITask(void *pvParameters)
             
             if (rxed_char == 8 || rxed_char == 127) // Backspace
             {
-                if (input_index > 0)
+                if (s_input_index > 0)
                 {
-                    input_index--;
+                    s_input_index--;
                     printf("\b \b");
                 }
             }
-            else if (input_index < MAX_INPUT_LENGTH - 1)
+            else if (s_input_index < MAX_INPUT_LENGTH - 1)
             {
                 // Echo character
                 putchar(rxed_char);
-                s_input_buffer[input_index] = (char) rxed_char;
-                input_index++;
+                s_input_buffer[s_input_index] = (char) rxed_char;
+                s_input_index++;
             }
             
             // Unlock stdio
@@ -864,6 +899,9 @@ static const CLI_Command_Definition_t xUptime = {
 
 bool cli_task_init(void)
 {
+    // Tell the logger to repaint our prompt after every log line.
+    logger_set_cli_redraw_callback(cli_redraw_input);
+
     // Register commands
     FreeRTOS_CLIRegisterCommand(&xTaskStats);
     FreeRTOS_CLIRegisterCommand(&xReboot);

@@ -112,6 +112,25 @@ bool logger_lock_stdio(void);
 bool logger_unlock_stdio(void);
 
 /**
+ * @brief Callback type for redrawing the CLI prompt after log output
+ *
+ * The callback is invoked while the logger holds the stdio mutex.
+ * It must only use printf/putchar and must not call any logger functions.
+ */
+typedef void (*logger_cli_redraw_cb_t)(void);
+
+/**
+ * @brief Register a callback to redraw the CLI prompt after each log line
+ *
+ * When set, the logger calls this after printing each log message so the
+ * CLI prompt and any partially-typed input are restored below the log output.
+ * Pass NULL to disable.
+ *
+ * @param cb Redraw callback function
+ */
+void logger_set_cli_redraw_callback(logger_cli_redraw_cb_t cb);
+
+/**
  * @brief Log a message (internal function, use macros instead)
  * 
  * @param level Log level
