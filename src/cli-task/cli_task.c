@@ -295,6 +295,7 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
                 "  config read <serial0|serial1|network|s2tcp|device>\r\n"
                 "  config write serial0|serial1 <baud|databits|parity|stopbits|flowcts|flowrts> <value>\r\n"
                 "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
+                "  config write network mode <static|dhcp>\r\n"
                 "  config write s2tcp <enable|serial|mode|port|timeout|keepalive|maxconn|remoteip|remoteport> <value>\r\n"
                 "  config write device <deviceid|loglevel|timestamp|taskname|colors> <value>\r\n"
                 "  config save\r\n"
@@ -423,6 +424,7 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
                     "  config write network subnet <a.b.c.d>\r\n"
                     "  config write network gateway <a.b.c.d>\r\n"
                     "  config write network dns <a.b.c.d>\r\n"
+                    "  config write network mode <static|dhcp>\r\n"
                     "  config write s2tcp enable <0|1>\r\n"
                     "  config write s2tcp serial <0|1>\r\n"
                     "  config write s2tcp mode <server|client>\r\n"
@@ -568,7 +570,9 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
             
             if (pcField == NULL || pcValue == NULL) {
                 snprintf(pcWriteBuffer, xWriteBufferLen, 
-                        "Error: Usage: config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n");
+                        "Error: Usage:\r\n"
+                        "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
+                        "  config write network mode <static|dhcp>\r\n");
                 return pdFALSE;
             }
             
@@ -585,34 +589,51 @@ static BaseType_t prvConfigCommand(char *pcWriteBuffer, size_t xWriteBufferLen, 
                 return pdFALSE;
             }
             
-            // Parse IP address string (a.b.c.d)
-            unsigned int a, b, c, d;
-            if (sscanf(value_buf, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 || 
-                a > 255 || b > 255 || c > 255 || d > 255) {
-                snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid IP format. Use a.b.c.d\r\n");
-                return pdFALSE;
-            }
-            
-            if (strncmp(pcField, "ip", 2) == 0) {
-                net_info.ip[0] = a; net_info.ip[1] = b; net_info.ip[2] = c; net_info.ip[3] = d;
-                snprintf(pcWriteBuffer, xWriteBufferLen, "IP address set to %u.%u.%u.%u\r\n", a, b, c, d);
-            }
-            else if (strncmp(pcField, "subnet", 6) == 0 || strncmp(pcField, "sn", 2) == 0) {
-                net_info.sn[0] = a; net_info.sn[1] = b; net_info.sn[2] = c; net_info.sn[3] = d;
-                snprintf(pcWriteBuffer, xWriteBufferLen, "Subnet mask set to %u.%u.%u.%u\r\n", a, b, c, d);
-            }
-            else if (strncmp(pcField, "gateway", 7) == 0 || strncmp(pcField, "gw", 2) == 0) {
-                net_info.gw[0] = a; net_info.gw[1] = b; net_info.gw[2] = c; net_info.gw[3] = d;
-                snprintf(pcWriteBuffer, xWriteBufferLen, "Gateway set to %u.%u.%u.%u\r\n", a, b, c, d);
-            }
-            else if (strncmp(pcField, "dns", 3) == 0) {
-                net_info.dns[0] = a; net_info.dns[1] = b; net_info.dns[2] = c; net_info.dns[3] = d;
-                snprintf(pcWriteBuffer, xWriteBufferLen, "DNS set to %u.%u.%u.%u\r\n", a, b, c, d);
+            if (strncmp(pcField, "mode", xFieldLength) == 0) {
+                if (strcmp(value_buf, "dhcp") == 0 || strcmp(value_buf, "1") == 0) {
+                    net_info.dhcp = NETINFO_DHCP;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Network mode set to DHCP\r\n");
+                }
+                else if (strcmp(value_buf, "static") == 0 || strcmp(value_buf, "0") == 0) {
+                    net_info.dhcp = NETINFO_STATIC;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Network mode set to Static\r\n");
+                }
+                else {
+                    snprintf(pcWriteBuffer, xWriteBufferLen,
+                            "Error: Network mode must be 'static' or 'dhcp'\r\n");
+                    return pdFALSE;
+                }
             }
             else {
-                snprintf(pcWriteBuffer, xWriteBufferLen, 
-                        "Error: Unknown network field. Use ip, subnet, gateway, or dns\r\n");
-                return pdFALSE;
+                // All other fields expect an IPv4 address (a.b.c.d)
+                unsigned int a, b, c, d;
+                if (sscanf(value_buf, "%u.%u.%u.%u", &a, &b, &c, &d) != 4 || 
+                    a > 255 || b > 255 || c > 255 || d > 255) {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Error: Invalid IP format. Use a.b.c.d\r\n");
+                    return pdFALSE;
+                }
+                
+                if (strncmp(pcField, "ip", xFieldLength) == 0) {
+                    net_info.ip[0] = a; net_info.ip[1] = b; net_info.ip[2] = c; net_info.ip[3] = d;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "IP address set to %u.%u.%u.%u\r\n", a, b, c, d);
+                }
+                else if (strncmp(pcField, "subnet", xFieldLength) == 0 || strncmp(pcField, "sn", xFieldLength) == 0) {
+                    net_info.sn[0] = a; net_info.sn[1] = b; net_info.sn[2] = c; net_info.sn[3] = d;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Subnet mask set to %u.%u.%u.%u\r\n", a, b, c, d);
+                }
+                else if (strncmp(pcField, "gateway", xFieldLength) == 0 || strncmp(pcField, "gw", xFieldLength) == 0) {
+                    net_info.gw[0] = a; net_info.gw[1] = b; net_info.gw[2] = c; net_info.gw[3] = d;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "Gateway set to %u.%u.%u.%u\r\n", a, b, c, d);
+                }
+                else if (strncmp(pcField, "dns", xFieldLength) == 0) {
+                    net_info.dns[0] = a; net_info.dns[1] = b; net_info.dns[2] = c; net_info.dns[3] = d;
+                    snprintf(pcWriteBuffer, xWriteBufferLen, "DNS set to %u.%u.%u.%u\r\n", a, b, c, d);
+                }
+                else {
+                    snprintf(pcWriteBuffer, xWriteBufferLen, 
+                            "Error: Unknown network field. Use ip, subnet, gateway, dns, or mode\r\n");
+                    return pdFALSE;
+                }
             }
             
             if (!config_set_net_info(&net_info)) {
@@ -857,6 +878,7 @@ static const CLI_Command_Definition_t xConfig = {
     "  config read <serial0|serial1|network|s2tcp|device>\r\n"
     "  config write serial0|serial1 <baud|databits|parity|stopbits|flowcts|flowrts> <value>\r\n"
     "  config write network <ip|subnet|gateway|dns> <a.b.c.d>\r\n"
+    "  config write network mode <static|dhcp>\r\n"
     "  config write s2tcp <enable|serial|mode|port|timeout|keepalive|maxconn|remoteip|remoteport> <value>\r\n"
     "  config write device <deviceid|loglevel|timestamp|taskname|colors> <value>\r\n"
     "  config save\r\n"
