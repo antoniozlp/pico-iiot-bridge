@@ -25,6 +25,12 @@ An industrial IoT bridge device based on the **Raspberry Pi RP2350** microcontro
   - [Tag Database](Web-Interface:-Tag-Database) - Centralized variable management
   - [Applying Changes](Web-Interface:-Applying-Changes) - How to apply configuration changes
 
+- **[CLI Reference](CLI-Reference)** - Serial console command-line interface
+  - `config read/write/save` - Read, modify, and persist all device settings
+  - `task-stats` - FreeRTOS task diagnostics
+  - `uptime` - System uptime
+  - `reboot` - Device restart
+
 ## Hardware
 
 | Component | Details |
