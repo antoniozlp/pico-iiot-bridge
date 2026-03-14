@@ -23,7 +23,8 @@
 #include "pico_flash_storage.h"
 #include "serial_to_tcp.h"
 #include "system_config.h"
-#include "modbus_rtu.h"
+#include "modbus_rtu_master.h"
+#include "modbus_rtu_slave.h"
 #include "tag_database.h"
 
 /**
@@ -106,9 +107,15 @@ int main(void)
         return 1;
     }
 
-    if (!modbus_rtu_task_init())
+    if (!modbus_rtu_master_task_init())
     {
-        LOG_ERROR("Failed to initialize Modbus task");
+        LOG_ERROR("Failed to initialize Modbus RTU master task");
+        return 1;
+    }
+
+    if (!modbus_rtu_slave_task_init())
+    {
+        LOG_ERROR("Failed to initialize Modbus RTU slave task");
         return 1;
     }
 
