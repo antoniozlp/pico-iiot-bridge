@@ -369,6 +369,279 @@ void modbus_map_from_tags(const modbus_request_config_t *config,
     }
 }
 
+// ============================================================================
+// Slave (server) helpers
+// ============================================================================
+
+/**
+ * @brief Fill a register output buffer from tag database values
+ */
+void modbus_tags_to_registers(const uint8_t *tag_handles, uint16_t handle_offset,
+                               uint16_t count, modbus_register_encoding_t encoding,
+                               uint16_t *registers_out)
+{
+    if (tag_handles == NULL || registers_out == NULL)
+    {
+        return;
+    }
+
+    memset(registers_out, 0, count * sizeof(uint16_t));
+
+    bool skip_next = false;
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        if (skip_next)
+        {
+            skip_next = false;
+            continue;
+        }
+
+        uint16_t h_idx = handle_offset + i;
+        if (h_idx >= MODBUS_MAX_REG_COUNT)
+        {
+            break;
+        }
+
+        uint8_t handle = tag_handles[h_idx];
+        if (handle == MODBUS_TAG_MAP_INVALID)
+        {
+            continue;  /* register stays 0 */
+        }
+
+        tag_metadata_t metadata;
+        if (!tag_db_get_metadata(handle, &metadata))
+        {
+            LOG_WARN("Slave tag mapping: invalid handle %u at index %u", handle, h_idx);
+            continue;
+        }
+
+        tag_value_t value;
+        if (!tag_db_read(handle, &value, NULL, NULL))
+        {
+            LOG_WARN("Slave tag mapping: failed to read tag handle %u", handle);
+            continue;
+        }
+
+        switch (metadata.data_type)
+        {
+            case TAG_TYPE_BOOL:
+                registers_out[i] = value.bool_val ? 1u : 0u;
+                break;
+
+            case TAG_TYPE_UINT8:
+                registers_out[i] = value.u8_val;
+                break;
+
+            case TAG_TYPE_UINT16:
+                registers_out[i] = value.u16_val;
+                break;
+
+            case TAG_TYPE_INT16:
+                registers_out[i] = (uint16_t)value.i16_val;
+                break;
+
+            case TAG_TYPE_UINT32:
+            case TAG_TYPE_INT32:
+                if (i + 1 < count)
+                {
+                    encode_uint32(value.u32_val,
+                                  &registers_out[i],
+                                  &registers_out[i + 1],
+                                  encoding);
+                    skip_next = true;
+                }
+                break;
+
+            case TAG_TYPE_FLOAT:
+                if (i + 1 < count)
+                {
+                    uint32_t raw;
+                    memcpy(&raw, &value.float_val, sizeof(float));
+                    encode_uint32(raw, &registers_out[i], &registers_out[i + 1], encoding);
+                    skip_next = true;
+                }
+                break;
+
+            default:
+                LOG_WARN("Slave tag mapping: unknown tag type %d", metadata.data_type);
+                break;
+        }
+    }
+}
+
+/**
+ * @brief Fill a coil/discrete bitfield from tag database values
+ */
+void modbus_tags_to_coils(const uint8_t *tag_handles, uint16_t handle_offset,
+                           uint16_t count, nmbs_bitfield coils_out)
+{
+    if (tag_handles == NULL || coils_out == NULL)
+    {
+        return;
+    }
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        uint16_t h_idx = handle_offset + i;
+        if (h_idx >= MODBUS_MAX_REG_COUNT)
+        {
+            break;
+        }
+
+        uint8_t coil_val = 0;
+        uint8_t handle = tag_handles[h_idx];
+
+        if (handle != MODBUS_TAG_MAP_INVALID)
+        {
+            tag_value_t value;
+            if (tag_db_read(handle, &value, NULL, NULL))
+            {
+                coil_val = (value.bool_val   ||
+                            value.u8_val  != 0 ||
+                            value.u16_val != 0 ||
+                            value.u32_val != 0 ||
+                            value.i16_val != 0 ||
+                            value.i32_val != 0 ||
+                            value.float_val != 0.0f) ? 1u : 0u;
+            }
+        }
+
+        nmbs_bitfield_write(coils_out, i, coil_val);
+    }
+}
+
+/**
+ * @brief Write register buffer values to tag database
+ */
+void modbus_registers_to_tags(const uint8_t *tag_handles, uint16_t handle_offset,
+                               uint16_t count, modbus_register_encoding_t encoding,
+                               const uint16_t *registers)
+{
+    if (tag_handles == NULL || registers == NULL)
+    {
+        return;
+    }
+
+    bool skip_next = false;
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        if (skip_next)
+        {
+            skip_next = false;
+            continue;
+        }
+
+        uint16_t h_idx = handle_offset + i;
+        if (h_idx >= MODBUS_MAX_REG_COUNT)
+        {
+            break;
+        }
+
+        uint8_t handle = tag_handles[h_idx];
+        if (handle == MODBUS_TAG_MAP_INVALID)
+        {
+            continue;
+        }
+
+        tag_metadata_t metadata;
+        if (!tag_db_get_metadata(handle, &metadata))
+        {
+            LOG_WARN("Slave write mapping: invalid handle %u at index %u", handle, h_idx);
+            continue;
+        }
+
+        tag_value_t value;
+        memset(&value, 0, sizeof(value));
+        bool write_ok = false;
+
+        switch (metadata.data_type)
+        {
+            case TAG_TYPE_BOOL:
+                value.bool_val = (registers[i] != 0);
+                write_ok = true;
+                break;
+
+            case TAG_TYPE_UINT8:
+                value.u8_val = (uint8_t)(registers[i] & 0xFF);
+                write_ok = true;
+                break;
+
+            case TAG_TYPE_UINT16:
+                value.u16_val = registers[i];
+                write_ok = true;
+                break;
+
+            case TAG_TYPE_INT16:
+                value.i16_val = (int16_t)registers[i];
+                write_ok = true;
+                break;
+
+            case TAG_TYPE_UINT32:
+            case TAG_TYPE_INT32:
+                if (i + 1 < count)
+                {
+                    value.u32_val = decode_uint32(registers[i], registers[i + 1], encoding);
+                    write_ok = true;
+                    skip_next = true;
+                }
+                break;
+
+            case TAG_TYPE_FLOAT:
+                if (i + 1 < count)
+                {
+                    uint32_t raw = decode_uint32(registers[i], registers[i + 1], encoding);
+                    memcpy(&value.float_val, &raw, sizeof(float));
+                    write_ok = true;
+                    skip_next = true;
+                }
+                break;
+
+            default:
+                LOG_WARN("Slave write mapping: unknown tag type %d", metadata.data_type);
+                break;
+        }
+
+        if (write_ok)
+        {
+            tag_db_write(handle, value, TAG_QUALITY_GOOD);
+        }
+    }
+}
+
+/**
+ * @brief Write coil bitfield values to tag database
+ */
+void modbus_coils_to_tags(const uint8_t *tag_handles, uint16_t handle_offset,
+                           uint16_t count, const nmbs_bitfield coils)
+{
+    if (tag_handles == NULL || coils == NULL)
+    {
+        return;
+    }
+
+    for (uint16_t i = 0; i < count; i++)
+    {
+        uint16_t h_idx = handle_offset + i;
+        if (h_idx >= MODBUS_MAX_REG_COUNT)
+        {
+            break;
+        }
+
+        uint8_t handle = tag_handles[h_idx];
+        if (handle == MODBUS_TAG_MAP_INVALID)
+        {
+            continue;
+        }
+
+        tag_value_t value;
+        memset(&value, 0, sizeof(value));
+        value.bool_val = (nmbs_bitfield_read(coils, i) != 0);
+        tag_db_write(handle, value, TAG_QUALITY_GOOD);
+    }
+}
+
 /**
  * @brief Mark all mapped tags as BAD quality (after failed read)
  */
