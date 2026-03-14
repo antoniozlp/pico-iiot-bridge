@@ -635,6 +635,205 @@ static uint8_t handle_set_modbus_datapoint(uint8_t * uri)
 }
 
 /**
+ * @brief Handle Modbus RTU server configuration update from CGI
+ *
+ * Processes set_modbus_server.cgi POST request with parameters:
+ * enable, serial_id, server_address
+ *
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
+static uint8_t handle_set_modbus_server(uint8_t *uri)
+{
+    uint8_t changed = 0;
+    uint8_t *param;
+    modbus_rtu_server_config_t server_config;
+
+    if (!config_get_modbus_rtu_server_config(&server_config))
+    {
+        LOG_ERROR("Failed to get Modbus RTU server config");
+        return HTTP_FAILED;
+    }
+
+    if ((param = get_http_param_value((char *)uri, "enable")))
+    {
+        int val = ATOI(param, 10);
+        server_config.enable = (val != 0);
+        changed = 1;
+    }
+
+    if ((param = get_http_param_value((char *)uri, "serial_id")))
+    {
+        int val = ATOI(param, 10);
+        if (val == 0 || val == 1)
+        {
+            server_config.serial_id = (uint8_t)val;
+            changed = 1;
+        }
+    }
+
+    if ((param = get_http_param_value((char *)uri, "server_address")))
+    {
+        int val = ATOI(param, 10);
+        if (val >= 1 && val <= 247)
+        {
+            server_config.server_address = (uint8_t)val;
+            changed = 1;
+        }
+    }
+
+    if (changed)
+    {
+        if (!config_set_modbus_rtu_server_config(&server_config))
+        {
+            LOG_ERROR("Failed to set Modbus RTU server config");
+            return HTTP_FAILED;
+        }
+
+        LOG_INFO("Modbus RTU server config updated: enable=%d, serial_id=%d, address=%d",
+                 server_config.enable, server_config.serial_id, server_config.server_address);
+
+        if (!config_save_to_flash())
+        {
+            LOG_ERROR("Failed to save config to flash");
+            return HTTP_FAILED;
+        }
+    }
+
+    return changed ? HTTP_OK : HTTP_FAILED;
+}
+
+/**
+ * @brief Handle Modbus RTU server memory block configuration update from CGI
+ *
+ * Processes set_modbus_server_memory_block.cgi POST request with parameters:
+ * block_idx, enabled, data_type, writable, start_address, count, encoding, tag0–tag9
+ *
+ * @param uri URI string with query parameters
+ * @return HTTP_OK if updated and saved, HTTP_FAILED on error
+ */
+static uint8_t handle_set_modbus_server_memory_block(uint8_t *uri)
+{
+    uint8_t changed = 0;
+    uint8_t *param;
+    modbus_rtu_server_config_t server_config;
+    int block_idx = -1;
+
+    if ((param = get_http_param_value((char *)uri, "block_idx")))
+    {
+        block_idx = ATOI(param, 10);
+        if (block_idx < 0 || block_idx >= MODBUS_SERVER_MEMORY_BLOCKS_MAX)
+        {
+            LOG_ERROR("Invalid server memory block index %d", block_idx);
+            return HTTP_FAILED;
+        }
+    }
+    else
+    {
+        LOG_ERROR("Missing block_idx parameter for server memory block");
+        return HTTP_FAILED;
+    }
+
+    if (!config_get_modbus_rtu_server_config(&server_config))
+    {
+        LOG_ERROR("Failed to get Modbus RTU server config");
+        return HTTP_FAILED;
+    }
+
+    modbus_server_memory_block_t *block = &server_config.memory_blocks[block_idx];
+
+    if ((param = get_http_param_value((char *)uri, "enabled")))
+    {
+        int val = ATOI(param, 10);
+        block->enabled = (val != 0);
+        changed = 1;
+    }
+
+    if ((param = get_http_param_value((char *)uri, "data_type")))
+    {
+        int val = ATOI(param, 10);
+        if (val >= 0 && val <= 3)
+        {
+            block->data_type = (modbus_data_type_t)val;
+            changed = 1;
+        }
+    }
+
+    if ((param = get_http_param_value((char *)uri, "writable")))
+    {
+        int val = ATOI(param, 10);
+        block->writable = (val != 0);
+        changed = 1;
+    }
+
+    if ((param = get_http_param_value((char *)uri, "start_address")))
+    {
+        int val = ATOI(param, 10);
+        if (val >= 0 && val <= 65535)
+        {
+            block->start_address = (uint16_t)val;
+            changed = 1;
+        }
+    }
+
+    if ((param = get_http_param_value((char *)uri, "count")))
+    {
+        int val = ATOI(param, 10);
+        if (val >= 1 && val <= MODBUS_MAX_REG_COUNT)
+        {
+            block->count = (uint16_t)val;
+            changed = 1;
+        }
+    }
+
+    if ((param = get_http_param_value((char *)uri, "encoding")))
+    {
+        int val = ATOI(param, 10);
+        if (val >= 0 && val <= 3)
+        {
+            block->encoding = (modbus_register_encoding_t)val;
+            changed = 1;
+        }
+    }
+
+    for (uint8_t i = 0; i < MODBUS_MAX_REG_COUNT; i++)
+    {
+        char param_name[8];
+        snprintf(param_name, sizeof(param_name), "tag%d", i);
+
+        if ((param = get_http_param_value((char *)uri, param_name)))
+        {
+            int val = ATOI(param, 10);
+            if (val >= 0 && val <= 255)
+            {
+                block->tag_handles[i] = (uint8_t)val;
+                changed = 1;
+            }
+        }
+    }
+
+    if (changed)
+    {
+        if (!config_set_modbus_rtu_server_config(&server_config))
+        {
+            LOG_ERROR("Failed to set Modbus RTU server config");
+            return HTTP_FAILED;
+        }
+
+        LOG_INFO("Modbus RTU server memory block %d updated: enabled=%d, type=%d, writable=%d, addr=%d, count=%d",
+                 block_idx, block->enabled, block->data_type, block->writable, block->start_address, block->count);
+
+        if (!config_save_to_flash())
+        {
+            LOG_ERROR("Failed to save config to flash");
+            return HTTP_FAILED;
+        }
+    }
+
+    return changed ? HTTP_OK : HTTP_FAILED;
+}
+
+/**
  * @brief Handle get_tags.cgi GET request
  * 
  * Returns JSON array of all tags with their current values, quality, and metadata.
@@ -1081,25 +1280,63 @@ uint8_t predefined_get_cgi_processor(uint8_t * uri_name, uint8_t * buf, uint16_t
 			(unsigned int)modbus_config.serial_id);
 		for (int i = 0; i < MODBUS_REQUESTS_MAX; i++)
 		{
-			*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"encoding\":%d,\"tag_handles\":[%d,%d,%d,%d,%d,%d,%d,%d,%d,%d]}",
-				i > 0 ? "," : "",
-				modbus_config.requests[i].enabled ? 1 : 0,
-				(unsigned int)modbus_config.requests[i].slave_address,
-				modbus_config.requests[i].data_type,
-				modbus_config.requests[i].operation,
-				(unsigned int)modbus_config.requests[i].start_address,
-				(unsigned int)modbus_config.requests[i].count,
-				modbus_config.requests[i].encoding,
-				modbus_config.requests[i].tag_handles[0],
-				modbus_config.requests[i].tag_handles[1],
-				modbus_config.requests[i].tag_handles[2],
-				modbus_config.requests[i].tag_handles[3],
-				modbus_config.requests[i].tag_handles[4],
-				modbus_config.requests[i].tag_handles[5],
-				modbus_config.requests[i].tag_handles[6],
-				modbus_config.requests[i].tag_handles[7],
-				modbus_config.requests[i].tag_handles[8],
-				modbus_config.requests[i].tag_handles[9]);
+		*len += sprintf((char *)buf + *len, "%s{\"enabled\":%d,\"slave_address\":%u,\"data_type\":%d,\"operation\":%d,\"start_address\":%u,\"count\":%u,\"encoding\":%d,\"tag_handles\":[%u,%u,%u,%u,%u,%u,%u,%u,%u,%u]}",
+			i > 0 ? "," : "",
+			modbus_config.requests[i].enabled ? 1 : 0,
+			(unsigned int)modbus_config.requests[i].slave_address,
+			modbus_config.requests[i].data_type,
+			modbus_config.requests[i].operation,
+			(unsigned int)modbus_config.requests[i].start_address,
+			(unsigned int)modbus_config.requests[i].count,
+			modbus_config.requests[i].encoding,
+			(unsigned int)modbus_config.requests[i].tag_handles[0],
+			(unsigned int)modbus_config.requests[i].tag_handles[1],
+			(unsigned int)modbus_config.requests[i].tag_handles[2],
+			(unsigned int)modbus_config.requests[i].tag_handles[3],
+			(unsigned int)modbus_config.requests[i].tag_handles[4],
+			(unsigned int)modbus_config.requests[i].tag_handles[5],
+			(unsigned int)modbus_config.requests[i].tag_handles[6],
+			(unsigned int)modbus_config.requests[i].tag_handles[7],
+			(unsigned int)modbus_config.requests[i].tag_handles[8],
+			(unsigned int)modbus_config.requests[i].tag_handles[9]);
+		}
+		*len += sprintf((char *)buf + *len, "]}");
+		return HTTP_OK;
+	}
+
+	if(strcmp((const char *)uri_name, "get_modbus_server.cgi") == 0)
+	{
+		modbus_rtu_server_config_t server_config;
+		if (!config_get_modbus_rtu_server_config(&server_config))
+		{
+			*len = sprintf((char *)buf, "{\"error\":\"Configuration not loaded\"}");
+			return HTTP_FAILED;
+		}
+		*len = sprintf((char *)buf, "{\"enable\":%d,\"serial_id\":%u,\"server_address\":%u,\"memory_blocks\":[",
+			server_config.enable ? 1 : 0,
+			(unsigned int)server_config.serial_id,
+			(unsigned int)server_config.server_address);
+		for (int i = 0; i < MODBUS_SERVER_MEMORY_BLOCKS_MAX; i++)
+		{
+		*len += sprintf((char *)buf + *len,
+			"%s{\"enabled\":%d,\"data_type\":%d,\"writable\":%d,\"start_address\":%u,\"count\":%u,\"encoding\":%d,\"tag_handles\":[%u,%u,%u,%u,%u,%u,%u,%u,%u,%u]}",
+			i > 0 ? "," : "",
+			server_config.memory_blocks[i].enabled ? 1 : 0,
+			server_config.memory_blocks[i].data_type,
+			server_config.memory_blocks[i].writable ? 1 : 0,
+			(unsigned int)server_config.memory_blocks[i].start_address,
+			(unsigned int)server_config.memory_blocks[i].count,
+			server_config.memory_blocks[i].encoding,
+			(unsigned int)server_config.memory_blocks[i].tag_handles[0],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[1],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[2],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[3],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[4],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[5],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[6],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[7],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[8],
+			(unsigned int)server_config.memory_blocks[i].tag_handles[9]);
 		}
 		*len += sprintf((char *)buf + *len, "]}");
 		return HTTP_OK;
@@ -1151,6 +1388,20 @@ uint8_t predefined_set_cgi_processor(uint8_t * uri_name, uint8_t * uri, uint8_t 
 	if(strcmp((const char *)uri_name, "set_modbus_datapoint.cgi") == 0)
 	{
 		uint8_t handled = handle_set_modbus_datapoint(uri);
+		*en = sprintf((char *)buf, "%d", handled == HTTP_OK);
+		return handled;
+	}
+
+	if(strcmp((const char *)uri_name, "set_modbus_server.cgi") == 0)
+	{
+		uint8_t handled = handle_set_modbus_server(uri);
+		*en = sprintf((char *)buf, "%d", handled == HTTP_OK);
+		return handled;
+	}
+
+	if(strcmp((const char *)uri_name, "set_modbus_server_memory_block.cgi") == 0)
+	{
+		uint8_t handled = handle_set_modbus_server_memory_block(uri);
 		*en = sprintf((char *)buf, "%d", handled == HTTP_OK);
 		return handled;
 	}

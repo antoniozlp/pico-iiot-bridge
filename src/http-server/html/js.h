@@ -3,7 +3,7 @@
 
 #define HTML_JS \
     "<script>"\
-    "var configLoaded = {network:false, serial:false, s2tcp:false, modbus:false, tagsForMapping:false};"\
+    "var configLoaded = {network:false, serial:false, s2tcp:false, modbus:false, modbusServer:false, tagsForMapping:false, tagsForServerMapping:false};"\
     "function showPage(id) {"\
         "document.querySelectorAll('section').forEach(el => el.classList.remove('visible'));"\
         "document.getElementById(id).classList.add('visible');"\
@@ -15,6 +15,10 @@
         "if(id === 'modbus') {"\
             "if(!configLoaded.tagsForMapping) { configLoaded.tagsForMapping = true; loadTagsForMapping(); }"\
             "if(!configLoaded.modbus) { configLoaded.modbus = true; loadModbusConfig(); }"\
+        "}"\
+        "if(id === 'modbus_server') {"\
+            "if(!configLoaded.tagsForServerMapping) { configLoaded.tagsForServerMapping = true; loadTagsForServerMapping(); }"\
+            "if(!configLoaded.modbusServer) { configLoaded.modbusServer = true; loadModbusServerConfig(); }"\
         "}"\
         "if(id === 'tags') refreshTags();"\
     "}"\
@@ -28,6 +32,12 @@
         "for(var i=0; i<10; i++){"\
             "document.getElementById('dp'+i+'-form').style.display = (i === idx) ? 'block' : 'none';"\
             "document.getElementById('dp'+i+'-btn').classList.toggle('active', i === idx);"\
+        "}"\
+    "}"\
+    "function showServerDp(idx) {"\
+        "for(var i=0; i<10; i++){"\
+            "document.getElementById('sdp'+i+'-form').style.display = (i === idx) ? 'block' : 'none';"\
+            "document.getElementById('sdp'+i+'-btn').classList.toggle('active', i === idx);"\
         "}"\
     "}"\
     "function toggleClientFields() {"\
@@ -124,6 +134,7 @@
                 "if(action.indexOf('set_network') >= 0) loadNetworkConfig();"\
                 "else if(action.indexOf('set_s2tcp') >= 0) loadS2tcpConfig();"\
                 "else if(action.indexOf('set_modbus_client') >= 0) loadModbusConfig();"\
+                "else if(action.indexOf('set_modbus_server') >= 0) loadModbusServerConfig();"\
             "})"\
             ".catch(function(err){ alert('Error saving settings: ' + err); });"\
     "}"\
@@ -262,6 +273,68 @@
                 "return data;"\
             "})"\
             ".catch(function(err){ console.log('Error loading tags for mapping: ', err); return {}; });"\
+    "}"\
+    "function loadTagsForServerMapping() {"\
+        "return fetch('get_tags.cgi')"\
+            ".then(function(res){ return res.json(); })"\
+            ".then(function(data){"\
+                "if(data.tags && data.tags.length > 0){"\
+                    "var typeNames = ['BOOL','UINT8','UINT16','UINT32','INT16','INT32','FLOAT'];"\
+                    "for(var dpIdx = 0; dpIdx < 10; dpIdx++){"\
+                        "for(var regIdx = 0; regIdx < 10; regIdx++){"\
+                            "var select = document.getElementById('sdp' + dpIdx + '_tag' + regIdx);"\
+                            "if(select){"\
+                                "select.innerHTML = '<option value=\"255\">Not Mapped</option>';"\
+                                "data.tags.forEach(function(tag){"\
+                                    "var opt = document.createElement('option');"\
+                                    "opt.value = tag.handle;"\
+                                    "opt.textContent = tag.name + ' (' + (typeNames[tag.type] || '?') + ')';"\
+                                    "select.appendChild(opt);"\
+                                "});"\
+                            "}"\
+                        "}"\
+                    "}"\
+                "}"\
+                "return data;"\
+            "})"\
+            ".catch(function(err){ console.log('Error loading tags for server mapping: ', err); return {}; });"\
+    "}"\
+    "function loadModbusServerConfig() {"\
+        "fetch('get_modbus_server.cgi').then(function(r){return r.json();}).then(function(srv){"\
+            "if(srv.enable !== undefined) document.getElementById('mbs_enable').value = srv.enable;"\
+            "if(srv.serial_id !== undefined) document.getElementById('mbs_serial').value = srv.serial_id;"\
+            "if(srv.server_address !== undefined) document.getElementById('mbs_address').value = srv.server_address;"\
+            "if(srv.memory_blocks){"\
+                "for(var i=0; i<srv.memory_blocks.length && i<10; i++){"\
+                    "var dp = srv.memory_blocks[i];"\
+                    "if(dp.enabled !== undefined) document.getElementById('sdp'+i+'_enable').value = dp.enabled;"\
+                    "if(dp.data_type !== undefined) document.getElementById('sdp'+i+'_type').value = dp.data_type;"\
+                    "if(dp.writable !== undefined) document.getElementById('sdp'+i+'_writable').value = dp.writable;"\
+                    "if(dp.start_address !== undefined) document.getElementById('sdp'+i+'_addr').value = dp.start_address;"\
+                    "if(dp.count !== undefined) document.getElementById('sdp'+i+'_count').value = dp.count;"\
+                    "if(dp.encoding !== undefined) document.getElementById('sdp'+i+'_encoding').value = dp.encoding;"\
+                    "if(dp.tag_handles){"\
+                        "for(var j=0; j<10; j++){"\
+                            "var tagSelect = document.getElementById('sdp'+i+'_tag'+j);"\
+                            "if(tagSelect && dp.tag_handles[j] !== undefined) tagSelect.value = dp.tag_handles[j];"\
+                        "}"\
+                    "}"\
+                "}"\
+            "}"\
+        "}).catch(function(e){console.log('ModbusServer:',e);});"\
+    "}"\
+    "function submitServerBlockForm(e, form, idx) {"\
+        "e.preventDefault();"\
+        "var formData = new FormData(form);"\
+        "var params = new URLSearchParams();"\
+        "for(var pair of formData.entries()){ params.append(pair[0], pair[1]); }"\
+        "fetch(form.action, { method:'POST', body:params })"\
+            ".then(function(res){ return res.text(); })"\
+            ".then(function(text){"\
+                "alert('Server memory block ' + idx + ' saved successfully!');"\
+                "loadModbusServerConfig();"\
+            "})"\
+            ".catch(function(err){ alert('Error saving memory block: ' + err); });"\
     "}"\
     "document.addEventListener('DOMContentLoaded', function(){"\
         "if(window.location.protocol === 'file:'){"\
