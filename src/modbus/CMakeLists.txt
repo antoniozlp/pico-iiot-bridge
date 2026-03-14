@@ -1,7 +1,8 @@
 add_library(modbus INTERFACE)
 
 target_sources(modbus INTERFACE
-    ${CMAKE_CURRENT_LIST_DIR}/modbus_rtu.c
+    ${CMAKE_CURRENT_LIST_DIR}/modbus_rtu_master.c
+    ${CMAKE_CURRENT_LIST_DIR}/modbus_rtu_slave.c
     ${CMAKE_CURRENT_LIST_DIR}/modbus_tag_mapping.c
     ${CMAKE_CURRENT_LIST_DIR}/modbus_request_processor.c)
 
