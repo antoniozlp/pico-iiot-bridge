@@ -13,7 +13,7 @@
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
 // In debugger Memory view use: 0x101F0000 (XIP_BASE + FLASH_TARGET_OFFSET)
 #define CONFIG_VERSION_MAJOR 0
-#define CONFIG_VERSION_MINOR 1  // Incremented for 32-bit encoding (ABCD/BADC/CDAB/DCBA)
+#define CONFIG_VERSION_MINOR 2  // Incremented for Modbus RTU server configuration
 #define CONFIG_VERSION_PATCH 0
 
 // ============================================================================
@@ -78,6 +78,39 @@ typedef struct {
 } modbus_rtu_client_config_t;
 
 // ============================================================================
+// Modbus RTU Server Configuration
+// ============================================================================
+
+#define MODBUS_SERVER_MEMORY_BLOCKS_MAX    10  // Maximum memory blocks in the server memory map
+
+/**
+ * @brief One contiguous block in the Modbus server memory map
+ *
+ * Maps a range of Modbus addresses [start_address, start_address + count)
+ * to up to MODBUS_MAX_REG_COUNT tag handles. Each position i in the block
+ * maps to tag_handles[i]; MODBUS_TAG_MAP_INVALID (0xFF) means unmapped.
+ */
+typedef struct {
+    uint8_t                     enabled;                            // Enable/disable this memory block
+    modbus_data_type_t          data_type;                          // Register type
+    uint8_t                     writable;                           // Allow master writes (COIL/HOLDING_REG only)
+    uint16_t                    start_address;                      // First Modbus address in this block
+    uint16_t                    count;                              // Number of registers/coils in this block
+    modbus_register_encoding_t  encoding;                           // 32-bit word/byte order
+    uint8_t                     tag_handles[MODBUS_MAX_REG_COUNT];  // Tag handle per register offset
+} modbus_server_memory_block_t;
+
+/**
+ * @brief Modbus RTU server (slave) configuration
+ */
+typedef struct {
+    uint8_t                        enable;                                          // Enable/disable the server task
+    uint8_t                        serial_id;                                       // UART to use: 0=UART0, 1=UART1
+    uint8_t                        server_address;                                  // RTU slave address (1-247)
+    modbus_server_memory_block_t   memory_blocks[MODBUS_SERVER_MEMORY_BLOCKS_MAX];
+} modbus_rtu_server_config_t;
+
+// ============================================================================
 // Tag Database Configuration (Persistent)
 // ============================================================================
 
@@ -130,7 +163,8 @@ typedef struct
     serial_config_t serial1;
     serial_to_tcp_mode_config_t serial_to_tcp_mode;
 	modbus_rtu_client_config_t modbus_rtu_client;
-	tag_database_config_t tag_database;        // Tag database persistence
+	modbus_rtu_server_config_t modbus_rtu_server;
+	tag_database_config_t tag_database;
 } system_config_t;
 
 
@@ -160,6 +194,10 @@ bool config_set_serial_to_tcp_mode(serial_to_tcp_mode_config_t *mode_config);
 // Modbus RTU client configuration (includes data points)
 bool config_get_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_client_config);
 bool config_set_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_client_config);
+
+// Modbus RTU server configuration (includes memory blocks)
+bool config_get_modbus_rtu_server_config(modbus_rtu_server_config_t *modbus_rtu_server_config);
+bool config_set_modbus_rtu_server_config(const modbus_rtu_server_config_t *modbus_rtu_server_config);
 
 // Tag database configuration
 bool config_get_tag_database(tag_database_config_t *tag_db_config);

@@ -117,6 +117,26 @@ void config_set_default(void)
         }
     }
 
+    // Modbus RTU server defaults
+    g_sys_cfg.modbus_rtu_server.enable = 0;           // Disabled by default
+    g_sys_cfg.modbus_rtu_server.serial_id = 1;        // Use UART1 by default
+    g_sys_cfg.modbus_rtu_server.server_address = 1;   // Default RTU slave address
+
+    for (uint8_t i = 0; i < MODBUS_SERVER_MEMORY_BLOCKS_MAX; i++)
+    {
+        g_sys_cfg.modbus_rtu_server.memory_blocks[i].enabled = 0;
+        g_sys_cfg.modbus_rtu_server.memory_blocks[i].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+        g_sys_cfg.modbus_rtu_server.memory_blocks[i].writable = 0;
+        g_sys_cfg.modbus_rtu_server.memory_blocks[i].start_address = 0;
+        g_sys_cfg.modbus_rtu_server.memory_blocks[i].count = 1;
+        g_sys_cfg.modbus_rtu_server.memory_blocks[i].encoding = MODBUS_ENCODING_ABCD;
+
+        for (uint8_t j = 0; j < MODBUS_MAX_REG_COUNT; j++)
+        {
+            g_sys_cfg.modbus_rtu_server.memory_blocks[i].tag_handles[j] = MODBUS_TAG_MAP_INVALID;
+        }
+    }
+
     // Tag database defaults
     g_sys_cfg.tag_database.tag_count = 0;
     g_sys_cfg.tag_database.auto_create_enabled = 1;  // Allow runtime creation
@@ -424,6 +444,45 @@ bool config_set_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_
     if (memcmp(&g_sys_cfg.modbus_rtu_client, modbus_rtu_client_config, sizeof(modbus_rtu_client_config_t)) != 0)
     {
         memcpy(&g_sys_cfg.modbus_rtu_client, modbus_rtu_client_config, sizeof(modbus_rtu_client_config_t));
+        g_config_changed = true;
+    }
+    return true;
+}
+
+/**
+ * @brief Get Modbus RTU server configuration
+ *
+ * @param modbus_rtu_server_config Pointer to modbus_rtu_server_config structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_get_modbus_rtu_server_config(modbus_rtu_server_config_t *modbus_rtu_server_config)
+{
+    if (modbus_rtu_server_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(modbus_rtu_server_config, &g_sys_cfg.modbus_rtu_server, sizeof(modbus_rtu_server_config_t));
+    return true;
+}
+
+/**
+ * @brief Set Modbus RTU server configuration
+ *
+ * Updates Modbus RTU server configuration and marks config as changed if values differ.
+ *
+ * @param modbus_rtu_server_config Pointer to modbus_rtu_server_config structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_set_modbus_rtu_server_config(const modbus_rtu_server_config_t *modbus_rtu_server_config)
+{
+    if (modbus_rtu_server_config == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+
+    if (memcmp(&g_sys_cfg.modbus_rtu_server, modbus_rtu_server_config, sizeof(modbus_rtu_server_config_t)) != 0)
+    {
+        memcpy(&g_sys_cfg.modbus_rtu_server, modbus_rtu_server_config, sizeof(modbus_rtu_server_config_t));
         g_config_changed = true;
     }
     return true;
