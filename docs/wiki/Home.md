@@ -21,7 +21,8 @@ An industrial IoT bridge device based on the **Raspberry Pi RP2350** microcontro
   - [Network Settings](Web-Interface:-Network-Settings) - IP, subnet, gateway, DNS, DHCP
   - [Serial Settings](Web-Interface:-Serial-Settings) - UART baud rate, data bits, parity, flow control
   - [Serial to TCP](Web-Interface:-Serial-to-TCP) - Transparent serial-to-Ethernet bridge
-  - [Modbus RTU](Web-Interface:-Modbus-RTU) - Modbus RTU client and request configuration
+  - [Modbus RTU Client](Web-Interface:-Modbus-RTU#modbus-rtu-client) - Poll data from external slaves into the Tag Database
+  - [Modbus RTU Server](Web-Interface:-Modbus-RTU#modbus-rtu-server) - Expose Tag Database tags as Modbus registers/coils to a master
   - [Tag Database](Web-Interface:-Tag-Database) - Centralized variable management
   - [Applying Changes](Web-Interface:-Applying-Changes) - How to apply configuration changes
 
