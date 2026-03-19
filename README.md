@@ -6,6 +6,15 @@ An industrial IoT bridge device based on the Raspberry Pi RP2350 microcontroller
 
 The Pico I-IoT Bridge is designed to bridge different industrial communication protocols, enabling seamless data exchange between legacy systems and modern IoT infrastructure. Built on a robust FreeRTOS foundation, it provides real-time performance, configuration flexibility, and reliable operation in industrial environments.
 
+## Documentation
+
+Detailed user and configuration documentation is available in the GitHub Wiki:
+
+- [Project Wiki](https://github.com/antoniozlp/pico-iiot-bridge/wiki)
+- [Web Interface Overview](https://github.com/antoniozlp/pico-iiot-bridge/wiki/Web-Interface)
+- [Modbus RTU Client and Server](https://github.com/antoniozlp/pico-iiot-bridge/wiki/Web-Interface:-Modbus-RTU)
+- [CLI Reference](https://github.com/antoniozlp/pico-iiot-bridge/wiki/CLI-Reference)
+
 ## Key Features
 
 ### Current Capabilities
@@ -14,14 +23,19 @@ The Pico I-IoT Bridge is designed to bridge different industrial communication p
 - **Ethernet Connectivity**: W6100 chip with hardware TCP/IP stack
 - **Web Configuration Interface**: HTTP server with responsive web UI for easy setup
 - **CLI Configuration**: Serial command-line interface for advanced configuration
-- **Persistent Configuration**: Flash-based storage for network, serial, and TCP settings
+- **Persistent Configuration**: Flash-based storage for network, serial, Modbus, and TCP settings
+- **Tag Database**: Centralized variable storage shared across tasks
+- **Modbus RTU Client**: Poll external slave devices and map values to tags
+- **Modbus RTU Server**: Expose tags as Modbus registers/coils to an external master
+- **Serial to TCP Bridge**: Transparent serial-to-Ethernet gateway
 
 ### Planned Features
 
-- **Serial to TCP Converter**: Transparent serial-to-Ethernet gateway
 - **Modbus TCP to Modbus RTU Converter**: Protocol bridge for Modbus networks
-- **Modbus RTU/TCP Client/Server**: Modbus RTU implementation
+- **Modbus TCP Client/Server**: Native Modbus TCP communication support
 - **Remote I/O (RTU)**: Analog and digital I/O over Ethernet
+- **MQTT Client**: Publish and subscribe industrial data to IoT platforms
+- **OPC UA Support**: Interoperability with industrial SCADA and MES systems
 - **And more**: Expandable architecture for additional protocols
 
 ## Hardware
@@ -141,10 +155,10 @@ For detailed examples, see `src/tag-database/tag_database_example.c` and `VARIAB
 ## Development Roadmap
 
 - [x] Tag Database for variable sharing
+- [x] HTTP server integration with tag database
 - [x] Modbus RTU client
-- [ ] HTTP server integration with tag database
-- [ ] Modbus RTU server
-- [ ] Serial to TCP transparent bridge
+- [x] Modbus RTU server
+- [x] Serial to TCP transparent bridge
 - [ ] Modbus TCP to RTU converter
 - [ ] Modbus TCP client/server
 - [ ] Remote I/O functionality
