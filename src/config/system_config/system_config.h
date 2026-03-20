@@ -13,7 +13,7 @@
 #define FLASH_TARGET_OFFSET 0x1F0000 // Last 64KB block (1,984KB offset)
 // In debugger Memory view use: 0x101F0000 (XIP_BASE + FLASH_TARGET_OFFSET)
 #define CONFIG_VERSION_MAJOR 0
-#define CONFIG_VERSION_MINOR 2  // Incremented for Modbus RTU server configuration
+#define CONFIG_VERSION_MINOR 3  // Incremented for Modbus TCP client/server configuration
 #define CONFIG_VERSION_PATCH 0
 
 // ============================================================================
@@ -111,6 +111,40 @@ typedef struct {
 } modbus_rtu_server_config_t;
 
 // ============================================================================
+// Modbus TCP Server Configuration
+// ============================================================================
+
+/**
+ * @brief Modbus TCP server configuration
+ *
+ * Exposes tag database values as Modbus registers to TCP clients.
+ * Reuses modbus_server_memory_block_t for register mapping.
+ */
+typedef struct {
+    uint8_t                         enable;                                         // Enable/disable the server task
+    uint16_t                        port;                                           // TCP port to listen on (default 502)
+    uint8_t                         server_address;                                 // Modbus unit ID (1-247)
+    modbus_server_memory_block_t    memory_blocks[MODBUS_SERVER_MEMORY_BLOCKS_MAX]; // Register map
+} modbus_tcp_server_config_t;
+
+// ============================================================================
+// Modbus TCP Client Configuration
+// ============================================================================
+
+/**
+ * @brief Modbus TCP client configuration
+ *
+ * Polls a remote Modbus TCP server and maps results to the tag database.
+ * Reuses modbus_request_config_t for request definitions.
+ */
+typedef struct {
+    uint8_t                     enable;                          // Enable/disable the client task
+    uint8_t                     remote_ip[4];                    // Remote server IP address
+    uint16_t                    remote_port;                     // Remote server port (default 502)
+    modbus_request_config_t     requests[MODBUS_REQUESTS_MAX];   // Request definitions
+} modbus_tcp_client_config_t;
+
+// ============================================================================
 // Tag Database Configuration (Persistent)
 // ============================================================================
 
@@ -164,6 +198,8 @@ typedef struct
     serial_to_tcp_mode_config_t serial_to_tcp_mode;
 	modbus_rtu_client_config_t modbus_rtu_client;
 	modbus_rtu_server_config_t modbus_rtu_server;
+	modbus_tcp_client_config_t modbus_tcp_client;
+	modbus_tcp_server_config_t modbus_tcp_server;
 	tag_database_config_t tag_database;
 } system_config_t;
 
@@ -198,6 +234,14 @@ bool config_set_modbus_rtu_client_config(modbus_rtu_client_config_t *modbus_rtu_
 // Modbus RTU server configuration (includes memory blocks)
 bool config_get_modbus_rtu_server_config(modbus_rtu_server_config_t *modbus_rtu_server_config);
 bool config_set_modbus_rtu_server_config(const modbus_rtu_server_config_t *modbus_rtu_server_config);
+
+// Modbus TCP client configuration (includes requests)
+bool config_get_modbus_tcp_client_config(modbus_tcp_client_config_t *cfg);
+bool config_set_modbus_tcp_client_config(const modbus_tcp_client_config_t *cfg);
+
+// Modbus TCP server configuration (includes memory blocks)
+bool config_get_modbus_tcp_server_config(modbus_tcp_server_config_t *cfg);
+bool config_set_modbus_tcp_server_config(const modbus_tcp_server_config_t *cfg);
 
 // Tag database configuration
 bool config_get_tag_database(tag_database_config_t *tag_db_config);

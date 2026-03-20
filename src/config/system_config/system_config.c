@@ -137,6 +137,48 @@ void config_set_default(void)
         }
     }
 
+    // Modbus TCP client defaults
+    g_sys_cfg.modbus_tcp_client.enable = 0;
+    uint8_t default_modbus_remote_ip[4] = {192, 168, 11, 100};
+    memcpy(g_sys_cfg.modbus_tcp_client.remote_ip, default_modbus_remote_ip, 4);
+    g_sys_cfg.modbus_tcp_client.remote_port = 502;
+
+    for (uint8_t i = 0; i < MODBUS_REQUESTS_MAX; i++)
+    {
+        g_sys_cfg.modbus_tcp_client.requests[i].enabled = 0;
+        g_sys_cfg.modbus_tcp_client.requests[i].slave_address = 1;
+        g_sys_cfg.modbus_tcp_client.requests[i].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+        g_sys_cfg.modbus_tcp_client.requests[i].operation = MODBUS_OP_READ;
+        g_sys_cfg.modbus_tcp_client.requests[i].start_address = 0;
+        g_sys_cfg.modbus_tcp_client.requests[i].count = 1;
+        g_sys_cfg.modbus_tcp_client.requests[i].encoding = MODBUS_ENCODING_ABCD;
+
+        for (uint8_t j = 0; j < MODBUS_MAX_REG_COUNT; j++)
+        {
+            g_sys_cfg.modbus_tcp_client.requests[i].tag_handles[j] = MODBUS_TAG_MAP_INVALID;
+        }
+    }
+
+    // Modbus TCP server defaults
+    g_sys_cfg.modbus_tcp_server.enable = 0;
+    g_sys_cfg.modbus_tcp_server.port = 502;
+    g_sys_cfg.modbus_tcp_server.server_address = 1;
+
+    for (uint8_t i = 0; i < MODBUS_SERVER_MEMORY_BLOCKS_MAX; i++)
+    {
+        g_sys_cfg.modbus_tcp_server.memory_blocks[i].enabled = 0;
+        g_sys_cfg.modbus_tcp_server.memory_blocks[i].data_type = MODBUS_DATA_TYPE_HOLDING_REGISTER;
+        g_sys_cfg.modbus_tcp_server.memory_blocks[i].writable = 0;
+        g_sys_cfg.modbus_tcp_server.memory_blocks[i].start_address = 0;
+        g_sys_cfg.modbus_tcp_server.memory_blocks[i].count = 1;
+        g_sys_cfg.modbus_tcp_server.memory_blocks[i].encoding = MODBUS_ENCODING_ABCD;
+
+        for (uint8_t j = 0; j < MODBUS_MAX_REG_COUNT; j++)
+        {
+            g_sys_cfg.modbus_tcp_server.memory_blocks[i].tag_handles[j] = MODBUS_TAG_MAP_INVALID;
+        }
+    }
+
     // Tag database defaults
     g_sys_cfg.tag_database.tag_count = 0;
     g_sys_cfg.tag_database.auto_create_enabled = 1;  // Allow runtime creation
@@ -483,6 +525,88 @@ bool config_set_modbus_rtu_server_config(const modbus_rtu_server_config_t *modbu
     if (memcmp(&g_sys_cfg.modbus_rtu_server, modbus_rtu_server_config, sizeof(modbus_rtu_server_config_t)) != 0)
     {
         memcpy(&g_sys_cfg.modbus_rtu_server, modbus_rtu_server_config, sizeof(modbus_rtu_server_config_t));
+        g_config_changed = true;
+    }
+    return true;
+}
+
+// ============================================================================
+// Modbus TCP Configuration Functions
+// ============================================================================
+
+/**
+ * @brief Get Modbus TCP client configuration
+ *
+ * @param cfg Pointer to modbus_tcp_client_config_t structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_get_modbus_tcp_client_config(modbus_tcp_client_config_t *cfg)
+{
+    if (cfg == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(cfg, &g_sys_cfg.modbus_tcp_client, sizeof(modbus_tcp_client_config_t));
+    return true;
+}
+
+/**
+ * @brief Set Modbus TCP client configuration
+ *
+ * Updates Modbus TCP client configuration and marks config as changed if values differ.
+ *
+ * @param cfg Pointer to modbus_tcp_client_config_t structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_set_modbus_tcp_client_config(const modbus_tcp_client_config_t *cfg)
+{
+    if (cfg == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+
+    if (memcmp(&g_sys_cfg.modbus_tcp_client, cfg, sizeof(modbus_tcp_client_config_t)) != 0)
+    {
+        memcpy(&g_sys_cfg.modbus_tcp_client, cfg, sizeof(modbus_tcp_client_config_t));
+        g_config_changed = true;
+    }
+    return true;
+}
+
+/**
+ * @brief Get Modbus TCP server configuration
+ *
+ * @param cfg Pointer to modbus_tcp_server_config_t structure to fill
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_get_modbus_tcp_server_config(modbus_tcp_server_config_t *cfg)
+{
+    if (cfg == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+    memcpy(cfg, &g_sys_cfg.modbus_tcp_server, sizeof(modbus_tcp_server_config_t));
+    return true;
+}
+
+/**
+ * @brief Set Modbus TCP server configuration
+ *
+ * Updates Modbus TCP server configuration and marks config as changed if values differ.
+ *
+ * @param cfg Pointer to modbus_tcp_server_config_t structure with new values
+ * @return true on success, false if parameter is NULL or config not loaded
+ */
+bool config_set_modbus_tcp_server_config(const modbus_tcp_server_config_t *cfg)
+{
+    if (cfg == NULL || !g_config_loaded)
+    {
+        return false;
+    }
+
+    if (memcmp(&g_sys_cfg.modbus_tcp_server, cfg, sizeof(modbus_tcp_server_config_t)) != 0)
+    {
+        memcpy(&g_sys_cfg.modbus_tcp_server, cfg, sizeof(modbus_tcp_server_config_t));
         g_config_changed = true;
     }
     return true;
