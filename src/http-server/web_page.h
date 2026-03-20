@@ -16,6 +16,7 @@
 #include "html/tcp.h"
 #include "html/modbus.h"
 #include "html/modbus_server.h"
+#include "html/modbus_tcp.h"
 #include "html/tags.h"
 
 #define index_page \
@@ -30,6 +31,8 @@
     HTML_SECTION_S2TCP \
     HTML_SECTION_MODBUS \
     HTML_SECTION_MODBUS_SERVER \
+    HTML_SECTION_MODBUS_TCP_CLIENT \
+    HTML_SECTION_MODBUS_TCP_SERVER \
     HTML_SECTION_TAGS \
     HTML_CONTENT_END \
     HTML_JS \

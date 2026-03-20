@@ -21,6 +21,8 @@
         "<div class=\"menu-item\" onclick=\"showPage('s2tcp')\">Serial to TCP</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('modbus')\">Modbus RTU Client</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('modbus_server')\">Modbus RTU Server</div>"\
+        "<div class=\"menu-item\" onclick=\"showPage('modbus_tcp_client')\">Modbus TCP Client</div>"\
+        "<div class=\"menu-item\" onclick=\"showPage('modbus_tcp_server')\">Modbus TCP Server</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('tags')\">Tag Database</div>"\
         "<div class=\"sidebar-footer\">"\
             "<button class=\"reboot-btn\" onclick=\"rebootToApply()\">Reboot to Apply</button>"\
