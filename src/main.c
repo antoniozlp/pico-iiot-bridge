@@ -26,6 +26,7 @@
 #include "modbus_rtu_master.h"
 #include "modbus_rtu_slave.h"
 #include "modbus_tcp_client.h"
+#include "modbus_tcp_server.h"
 #include "tag_database.h"
 
 /**
@@ -123,6 +124,12 @@ int main(void)
     if (!modbus_tcp_client_task_init())
     {
         LOG_ERROR("Failed to initialize Modbus TCP client task");
+        return 1;
+    }
+
+    if (!modbus_tcp_server_task_init())
+    {
+        LOG_ERROR("Failed to initialize Modbus TCP server task");
         return 1;
     }
 
