@@ -13,6 +13,7 @@ Detailed user and configuration documentation is available in the GitHub Wiki:
 - [Project Wiki](https://github.com/antoniozlp/pico-iiot-bridge/wiki)
 - [Web Interface Overview](https://github.com/antoniozlp/pico-iiot-bridge/wiki/Web-Interface)
 - [Modbus RTU Client and Server](https://github.com/antoniozlp/pico-iiot-bridge/wiki/Web-Interface:-Modbus-RTU)
+- [Modbus TCP Client and Server](https://github.com/antoniozlp/pico-iiot-bridge/wiki/Web-Interface:-Modbus-TCP)
 - [CLI Reference](https://github.com/antoniozlp/pico-iiot-bridge/wiki/CLI-Reference)
 
 ## Key Features
@@ -27,12 +28,13 @@ Detailed user and configuration documentation is available in the GitHub Wiki:
 - **Tag Database**: Centralized variable storage shared across tasks
 - **Modbus RTU Client**: Poll external slave devices and map values to tags
 - **Modbus RTU Server**: Expose tags as Modbus registers/coils to an external master
+- **Modbus TCP Client**: Poll a remote Modbus TCP server and map values to tags
+- **Modbus TCP Server**: Expose tags as Modbus registers/coils to Modbus TCP clients
 - **Serial to TCP Bridge**: Transparent serial-to-Ethernet gateway
 
 ### Planned Features
 
 - **Modbus TCP to Modbus RTU Converter**: Protocol bridge for Modbus networks
-- **Modbus TCP Client/Server**: Native Modbus TCP communication support
 - **Remote I/O (RTU)**: Analog and digital I/O over Ethernet
 - **MQTT Client**: Publish and subscribe industrial data to IoT platforms
 - **OPC UA Support**: Interoperability with industrial SCADA and MES systems
@@ -160,7 +162,7 @@ For detailed examples, see `src/tag-database/tag_database_example.c` and `VARIAB
 - [x] Modbus RTU server
 - [x] Serial to TCP transparent bridge
 - [ ] Modbus TCP to RTU converter
-- [ ] Modbus TCP client/server
+- [x] Modbus TCP client/server
 - [ ] Remote I/O functionality
 - [ ] MQTT client support
 - [ ] OPC UA support
