@@ -29,6 +29,7 @@ The web interface uses a sidebar navigation layout with the following pages:
 | **[Serial](Web-Interface:-Serial-Settings)** | UART interface parameters (baud rate, data bits, parity, stop bits, flow control) |
 | **[Serial to TCP](Web-Interface:-Serial-to-TCP)** | Transparent serial-to-TCP bridge configuration |
 | **[Modbus RTU](Web-Interface:-Modbus-RTU)** | Modbus RTU client settings and request configuration |
+| **[Modbus TCP](Web-Interface:-Modbus-TCP)** | Modbus TCP client and server over Ethernet (remote server, listen port, requests, memory blocks) |
 | **[Tag Database](Web-Interface:-Tag-Database)** | Create, view, and delete tags used for data exchange between protocols |
 
 A **"Reboot to Apply"** button is always visible at the bottom of the sidebar. See [Applying Changes](Web-Interface:-Applying-Changes) for details on when a reboot is needed.
