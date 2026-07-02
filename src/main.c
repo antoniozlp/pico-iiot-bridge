@@ -28,6 +28,7 @@
 #include "modbus_tcp_client.h"
 #include "modbus_tcp_server.h"
 #include "tag_database.h"
+#include "tag_database_example.h"
 
 /**
  * @brief Application entry point
@@ -82,7 +83,29 @@ int main(void)
 
     // Load tags from flash (if any exist)
     uint16_t loaded_count = tag_db_load_from_flash();
-    
+
+#ifdef TAG_DATABASE_EXAMPLE_ENABLED
+    // Tag database demo: creates sample tags and starts producer/consumer
+    // tasks that write/read them. Enable via the ENABLE_TAG_DATABASE_EXAMPLE
+    // CMake option.
+    if (!example_tags_init())
+    {
+        LOG_ERROR("Failed to create tag database example tags");
+        return 1;
+    }
+
+    if (!example_producer_task_init())
+    {
+        LOG_ERROR("Failed to initialize example producer task");
+        return 1;
+    }
+
+    if (!example_consumer_task_init())
+    {
+        LOG_ERROR("Failed to initialize example consumer task");
+        return 1;
+    }
+#endif
 
     // Initialize and create FreeRTOS tasks
     if (!network_task_init())

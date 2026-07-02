@@ -181,6 +181,14 @@ add_subdirectory(src/modbus)
 # ========================= Tag Database =========================
 add_subdirectory(src/tag-database)
 
+# Optionally enable the tag database demo (sample tags + producer/consumer
+# tasks in src/tag-database/tag_database_example.c). Off by default since
+# it's example code, not a production feature.
+option(ENABLE_TAG_DATABASE_EXAMPLE "Enable tag database demo producer/consumer tasks" OFF)
+if(ENABLE_TAG_DATABASE_EXAMPLE)
+    add_definitions(-DTAG_DATABASE_EXAMPLE_ENABLED)
+endif()
+
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(pico-iiot-bridge src/main.c )
