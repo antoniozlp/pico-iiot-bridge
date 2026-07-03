@@ -24,6 +24,7 @@
         "<div class=\"menu-item\" onclick=\"showPage('modbus_tcp_client')\">Modbus TCP Client</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('modbus_tcp_server')\">Modbus TCP Server</div>"\
         "<div class=\"menu-item\" onclick=\"showPage('tags')\">Tag Database</div>"\
+        "<div class=\"menu-item\" onclick=\"showPage('plot')\">Data Plot</div>"\
         "<div class=\"sidebar-footer\">"\
             "<button class=\"reboot-btn\" onclick=\"rebootToApply()\">Reboot to Apply</button>"\
         "</div>"\

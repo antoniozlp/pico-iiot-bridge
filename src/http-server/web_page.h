@@ -18,6 +18,7 @@
 #include "html/modbus_server.h"
 #include "html/modbus_tcp.h"
 #include "html/tags.h"
+#include "html/plot.h"
 
 #define index_page \
     HTML_HEAD_START \
@@ -34,6 +35,7 @@
     HTML_SECTION_MODBUS_TCP_CLIENT \
     HTML_SECTION_MODBUS_TCP_SERVER \
     HTML_SECTION_TAGS \
+    HTML_SECTION_PLOT \
     HTML_CONTENT_END \
     HTML_JS \
     HTML_BODY_END

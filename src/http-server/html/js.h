@@ -4,6 +4,7 @@
 #define HTML_JS \
     "<script>"\
     "var configLoaded = {network:false, serial:false, s2tcp:false, modbus:false, modbusServer:false, modbusTcpClient:false, modbusTcpServer:false, tagsForMapping:false, tagsForServerMapping:false, tagsForTcpMapping:false, tagsForTcpServerMapping:false};"\
+    "var plotState = {selectedHandle:-1, values:[], labels:[], maxPoints:60};"\
     "function showPage(id) {"\
         "document.querySelectorAll('section').forEach(el => el.classList.remove('visible'));"\
         "document.getElementById(id).classList.add('visible');"\
@@ -29,6 +30,7 @@
             "if(!configLoaded.modbusTcpServer) { configLoaded.modbusTcpServer = true; loadModbusTcpServerConfig(); }"\
         "}"\
         "if(id === 'tags') refreshTags();"\
+        "if(id === 'plot') { loadPlotTagSelect(); drawPlotChart(); updatePlotStats(); }"\
     "}"\
     "function showSerial(id) {"\
         "document.getElementById('serial0-form').style.display = (id === 0) ? 'block' : 'none';"\
@@ -268,8 +270,131 @@
                     "document.getElementById('tag-count').textContent = '0 tags';"\
                     "tbody.innerHTML = '<tr><td colspan=\"7\" style=\"padding:20px; text-align:center; color:#999;\">No tags configured</td></tr>';"\
                 "}"\
+                "collectPlotSample(data.tags || []);"\
             "})"\
             ".catch(function(err){ console.log('Error fetching tags: ', err); });"\
+    "}"\
+    "function collectPlotSample(tags) {"\
+        "if(plotState.selectedHandle === -1) return;"\
+        "var tag = null;"\
+        "for(var i=0; i<tags.length; i++){ if(tags[i].handle === plotState.selectedHandle){ tag = tags[i]; break; } }"\
+        "if(!tag){ plotState.selectedHandle = -1; return; }"\
+        "plotState.values.push(Number(tag.value));"\
+        "plotState.labels.push(new Date().toLocaleTimeString());"\
+        "while(plotState.values.length > plotState.maxPoints){ plotState.values.shift(); plotState.labels.shift(); }"\
+        "var plotSection = document.getElementById('plot');"\
+        "if(plotSection && plotSection.classList.contains('visible')){"\
+            "drawPlotChart();"\
+            "updatePlotStats();"\
+        "}"\
+    "}"\
+    "function loadPlotTagSelect() {"\
+        "fetch('get_tags.cgi').then(function(r){return r.json();}).then(function(data){"\
+            "var select = document.getElementById('plot-tag-select');"\
+            "var prevValue = select.value;"\
+            "select.innerHTML = '<option value=\"\">-- Select a tag --</option>';"\
+            "if(data.tags && data.tags.length > 0){"\
+                "var typeNames = ['BOOL','UINT8','UINT16','UINT32','INT16','INT32','FLOAT'];"\
+                "data.tags.forEach(function(tag){"\
+                    "var opt = document.createElement('option');"\
+                    "opt.value = tag.handle;"\
+                    "opt.textContent = tag.name + ' (' + (typeNames[tag.type] || '?') + ')';"\
+                    "select.appendChild(opt);"\
+                "});"\
+                "if(prevValue) select.value = prevValue;"\
+            "}"\
+        "}).catch(function(e){ console.log('PlotTags:', e); });"\
+    "}"\
+    "function onPlotTagChange() {"\
+        "var select = document.getElementById('plot-tag-select');"\
+        "var handle = select.value === '' ? -1 : parseInt(select.value, 10);"\
+        "plotState.selectedHandle = handle;"\
+        "plotState.values = [];"\
+        "plotState.labels = [];"\
+        "var opt = select.options[select.selectedIndex];"\
+        "document.getElementById('plot-tag-name').textContent = (handle === -1) ? 'No tag selected' : opt.textContent;"\
+        "drawPlotChart();"\
+        "updatePlotStats();"\
+    "}"\
+    "function onPlotWindowChange() {"\
+        "var select = document.getElementById('plot-window-select');"\
+        "plotState.maxPoints = parseInt(select.value, 10);"\
+        "while(plotState.values.length > plotState.maxPoints){ plotState.values.shift(); plotState.labels.shift(); }"\
+        "drawPlotChart();"\
+        "updatePlotStats();"\
+    "}"\
+    "function clearPlotData() {"\
+        "plotState.values = [];"\
+        "plotState.labels = [];"\
+        "drawPlotChart();"\
+        "updatePlotStats();"\
+    "}"\
+    "function updatePlotStats() {"\
+        "var values = plotState.values;"\
+        "var cur = values.length ? values[values.length-1] : null;"\
+        "var min = values.length ? Math.min.apply(null, values) : null;"\
+        "var max = values.length ? Math.max.apply(null, values) : null;"\
+        "var avg = values.length ? (values.reduce(function(a,b){return a+b;}, 0) / values.length) : null;"\
+        "document.getElementById('plot-current').textContent = cur !== null ? cur.toFixed(2) : '--';"\
+        "document.getElementById('plot-min').textContent = min !== null ? min.toFixed(2) : '--';"\
+        "document.getElementById('plot-max').textContent = max !== null ? max.toFixed(2) : '--';"\
+        "document.getElementById('plot-avg').textContent = avg !== null ? avg.toFixed(2) : '--';"\
+        "document.getElementById('plot-samples').textContent = values.length;"\
+    "}"\
+    "function drawPlotChart() {"\
+        "var canvas = document.getElementById('plot-canvas');"\
+        "if(!canvas || !canvas.getContext) return;"\
+        "var ctx = canvas.getContext('2d');"\
+        "var w = canvas.width, h = canvas.height;"\
+        "ctx.clearRect(0, 0, w, h);"\
+        "var pad = {left:55, right:15, top:15, bottom:25};"\
+        "var plotW = w - pad.left - pad.right;"\
+        "var plotH = h - pad.top - pad.bottom;"\
+        "ctx.strokeStyle = '#ccc';"\
+        "ctx.strokeRect(pad.left, pad.top, plotW, plotH);"\
+        "var values = plotState.values;"\
+        "if(!values || values.length === 0){"\
+            "ctx.fillStyle = '#999';"\
+            "ctx.font = '13px sans-serif';"\
+            "ctx.fillText(plotState.selectedHandle === -1 ? 'Select a tag to begin plotting' : 'Waiting for samples...', pad.left + 10, pad.top + plotH/2);"\
+            "return;"\
+        "}"\
+        "var minV = Math.min.apply(null, values);"\
+        "var maxV = Math.max.apply(null, values);"\
+        "if(minV === maxV){ minV -= 1; maxV += 1; }"\
+        "var range = maxV - minV;"\
+        "var divisions = 5;"\
+        "ctx.font = '11px sans-serif';"\
+        "for(var i=0; i<=divisions; i++){"\
+            "var y = pad.top + plotH - (i/divisions) * plotH;"\
+            "var val = minV + (i/divisions) * range;"\
+            "ctx.strokeStyle = '#eee';"\
+            "ctx.beginPath();"\
+            "ctx.moveTo(pad.left, y);"\
+            "ctx.lineTo(pad.left + plotW, y);"\
+            "ctx.stroke();"\
+            "ctx.fillStyle = '#666';"\
+            "ctx.fillText(val.toFixed(2), 2, y + 4);"\
+        "}"\
+        "var n = values.length;"\
+        "ctx.strokeStyle = '#2196F3';"\
+        "ctx.lineWidth = 2;"\
+        "ctx.beginPath();"\
+        "for(var i=0; i<n; i++){"\
+            "var x = pad.left + (n === 1 ? plotW/2 : (i/(n-1)) * plotW);"\
+            "var y = pad.top + plotH - ((values[i] - minV)/range) * plotH;"\
+            "if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);"\
+        "}"\
+        "ctx.stroke();"\
+        "ctx.lineWidth = 1;"\
+        "ctx.fillStyle = '#2196F3';"\
+        "for(var i=0; i<n; i++){"\
+            "var x = pad.left + (n === 1 ? plotW/2 : (i/(n-1)) * plotW);"\
+            "var y = pad.top + plotH - ((values[i] - minV)/range) * plotH;"\
+            "ctx.beginPath();"\
+            "ctx.arc(x, y, 2.5, 0, Math.PI*2);"\
+            "ctx.fill();"\
+        "}"\
     "}"\
     "function loadTagsForMapping() {"\
         "return fetch('get_tags.cgi')"\
