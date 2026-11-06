@@ -166,3 +166,9 @@ For detailed examples, see `src/tag-database/tag_database_example.c` and `VARIAB
 - [ ] Remote I/O functionality
 - [ ] MQTT client support
 - [ ] OPC UA support
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+Third-party code keeps its original license: the FreeRTOS Kernel, FreeRTOS-Plus-CLI, WIZnet ioLibrary_Driver and nanoMODBUS are MIT-licensed, and the WIZnet/Raspberry Pi port files under `lib/WIZnet/port/` (and `src/http-server/web_page.h`) are BSD-3-Clause.
